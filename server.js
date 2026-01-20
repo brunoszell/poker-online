@@ -6,11 +6,10 @@ const http = require("http");
 const WebSocket = require("ws");
 
 const PORT = process.env.PORT || 8080;
-const MAX_PLAYERS = 10; // max 10 EMBER / szoba
-const HEARTBEAT_MS = 30000; // 30s ping (Render/proxy miatt hasznos)
+const MAX_PLAYERS = 10;
+const HEARTBEAT_MS = 30000;
 
 const server = http.createServer((req, res) => {
-  // egyszeru health endpoint (Rendernek is jol jon)
   res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
   res.end("Poker WS server running.\n");
 });
@@ -50,25 +49,17 @@ function ensureHost(r) {
   r.hostId = r.humans[0]?.clientId ?? null;
 }
 
-// ===== Ping/Pong heartbeat (proxy idle disconnect ellen) =====
-function heartbeat() {
-  this.isAlive = true;
-}
-
+// heartbeat
+function heartbeat() { this.isAlive = true; }
 const interval = setInterval(() => {
   for (const ws of wss.clients) {
-    if (ws.isAlive === false) {
-      try { ws.terminate(); } catch {}
-      continue;
-    }
+    if (ws.isAlive === false) { try { ws.terminate(); } catch {} continue; }
     ws.isAlive = false;
     try { ws.ping(); } catch {}
   }
 }, HEARTBEAT_MS);
-
 wss.on("close", () => clearInterval(interval));
 
-// ===== WebSocket events =====
 wss.on("connection", (ws) => {
   const clientId = rid();
   ws._id = clientId;
@@ -77,21 +68,13 @@ wss.on("connection", (ws) => {
   ws.isAlive = true;
   ws.on("pong", heartbeat);
 
-  // (opcionalis) log
-  console.log("WS kapcsolat:", clientId);
-
   ws.on("message", (buf) => {
     let msg;
-    try {
-      msg = JSON.parse(buf.toString());
-    } catch {
-      return;
-    }
+    try { msg = JSON.parse(buf.toString()); } catch { return; }
 
-    // ===== JOIN =====
+    // JOIN
     if (msg.type === "join") {
       const { room, name, pw } = msg;
-
       if (!room || !name || !pw) {
         return send(ws, { type: "error", message: "Hiányzó belépési adat." });
       }
@@ -108,7 +91,6 @@ wss.on("connection", (ws) => {
           started: false,
         };
         rooms.set(room, r);
-        console.log(`Szoba létrehozva: ${room}`);
       } else if (r.pw !== pw) {
         return send(ws, { type: "error", message: "Rossz jelszó." });
       }
@@ -126,14 +108,11 @@ wss.on("connection", (ws) => {
 
       ensureHost(r);
 
-      console.log(`Belépett: ${name} (${clientId}) szoba=${room} seat=${seat} host=${r.hostId}`);
-
       send(ws, { type: "welcome", clientId, hostId: r.hostId, seat });
       broadcast(room, { type: "lobby", lobby: lobbyPayload(r), hostId: r.hostId });
       return;
     }
 
-    // ===== MUST HAVE ROOM =====
     const room = ws._room;
     if (!room) return;
     const r = rooms.get(room);
@@ -144,13 +123,13 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    // host snapshots
     if (msg.type === "start") {
       if (ws._id !== r.hostId) return;
       r.started = true;
       broadcast(room, { type: "start", state: msg.state });
       return;
     }
-
     if (msg.type === "state") {
       if (ws._id !== r.hostId) return;
       broadcast(room, { type: "state", state: msg.state });
@@ -161,9 +140,9 @@ wss.on("connection", (ws) => {
       if (msg.intent === "ready") r.ready[ws._id] = true;
       if (msg.intent === "unready") r.ready[ws._id] = false;
 
+      // ✅ HOST CONFIG MOST MÁR BÁRMIKOR: a következő új játék/leosztás ezt fogja használni
       if (msg.intent === "hostConfig") {
         if (ws._id !== r.hostId) return;
-        if (r.started) return;
         if (msg.cfg && typeof msg.cfg === "object") {
           const bots = Math.max(0, Math.min(10, Number(msg.cfg.bots ?? r.cfg.bots)));
           const stack = Math.max(100, Math.min(50000, Number(msg.cfg.stack ?? r.cfg.stack)));
@@ -178,7 +157,6 @@ wss.on("connection", (ws) => {
         broadcast(room, { type: "chat", name: who, text, at: Date.now() });
       }
 
-      // forward hostnak
       const hostWs = r.clients.get(r.hostId);
       if (hostWs) {
         send(hostWs, {
@@ -212,14 +190,8 @@ wss.on("connection", (ws) => {
     ensureHost(r);
     if (oldHost !== r.hostId) broadcast(room, { type: "hostChanged", hostId: r.hostId });
 
-    console.log(`Kilépett: ${ws._id} szoba=${room} (host most: ${r.hostId})`);
-
-    if (r.clients.size === 0) {
-      rooms.delete(room);
-      console.log(`Szoba törölve (üres): ${room}`);
-    } else {
-      broadcast(room, { type: "lobby", lobby: lobbyPayload(r), hostId: r.hostId });
-    }
+    if (r.clients.size === 0) rooms.delete(room);
+    else broadcast(room, { type: "lobby", lobby: lobbyPayload(r), hostId: r.hostId });
   });
 });
 
