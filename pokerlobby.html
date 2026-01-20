@@ -61,10 +61,11 @@
       localStorage.setItem("poker_lobby", JSON.stringify({ name, room }));
       sessionStorage.setItem("poker_room_pw", pw);
 
-      const ws = "ws://localhost:8080";
+      const ws = "wss://poker-online-3bzf.onrender.com";
       location.href =
         `pokergame.html?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}&ws=${encodeURIComponent(ws)}`;
     });
   </script>
 </body>
 </html>
+
