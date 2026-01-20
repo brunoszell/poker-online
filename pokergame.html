@@ -40,7 +40,7 @@
     .card.red{color:#c21d1d}
     .log{margin-top:10px;height:170px;overflow:auto;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.18);border-radius:14px;padding:10px;font-size:12px;color:var(--muted);white-space:pre-wrap}
 
-    /* ====== VIZUÁLIS ASZTAL ====== */
+    /* ===== ASZTAL ===== */
     .tableWrap{margin-top:12px;border:1px solid rgba(255,255,255,.12);border-radius:18px;background:rgba(255,255,255,.06);padding:12px}
     .table{
       position:relative;
@@ -61,9 +61,11 @@
     }
     .boardRow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;align-items:center;min-height:72px}
     .myHandRow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:10px}
+
+    /* kisebb seat, hogy showdownnál se lógjon ki */
     .seat{
       position:absolute;
-      width:160px;
+      width:150px;
       padding:7px 9px;
       border-radius:14px;
       border:1px solid rgba(255,255,255,.12);
@@ -75,14 +77,14 @@
     .seat .topline{display:flex;justify-content:space-between;gap:8px;align-items:center}
     .seat .name{
       font-weight:900;color:var(--text);
-      max-width:110px;
+      max-width:100px;
       overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
     }
     .seat .meta{color:var(--muted);white-space:nowrap}
     .seat .badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
     .seat .small{margin-top:6px;color:var(--muted)}
     .seat .handMini{display:flex;gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap}
-    .seat .handMini .card{transform:scale(.8);transform-origin:center}
+    .seat .handMini .card{transform:scale(.72);transform-origin:center}
     .seat.toAct{outline:2px solid rgba(255,207,90,.75);box-shadow:0 0 0 8px rgba(255,207,90,.10)}
     .seat.folded{opacity:.55}
     .seat.me{border-color:rgba(107,255,177,.35)}
@@ -90,7 +92,6 @@
   </style>
 </head>
 <body>
-
 <header>
   <div class="row" style="gap:10px">
     <span class="badge">Szoba: <b id="room"></b></span>
@@ -150,7 +151,7 @@
           <button id="newGameBtn">🔁 ÚJ JÁTÉK</button>
         </div>
 
-        <!-- ✅ HOST: csak EMBEREK listázása -->
+        <!-- HOST: ZSETON ADÁS (csak EMBEREK listázva, és csak kör végén enged) -->
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <label class="badge">Játékos:
             <select id="topupPlayer"></select>
@@ -160,6 +161,7 @@
           </label>
           <button id="topupBtn">➕ Zseton adása</button>
         </div>
+        <div class="hint">Zsetont adni <b>kör végén</b> lehet (amikor vége a leosztásnak).</div>
       </div>
 
       <div class="row" style="margin-top:10px">
@@ -468,6 +470,7 @@
     if(st.history.length > 250) st.history.shift();
     st.msg = text;
   }
+
   function postBlind(st, idx, amt, label){
     const p=st.players[idx];
     const pay=Math.min(amt, p.stack);
@@ -475,6 +478,7 @@
     if(p.stack===0) p.allIn=true;
     hist(st, `${p.name} posztolja: ${label} ${pay}`);
   }
+
   function startHand(st){
     st.handNo++;
     st.history = [];
@@ -518,6 +522,7 @@
     st.acted = [];
     hist(st, `Preflop indul. Aktuális tét: ${st.currentBet}.`);
   }
+
   function actFold(st, idx){
     st.players[idx].folded=true;
     st.acted.push(idx);
@@ -533,6 +538,7 @@
     }
     st.toAct = bettingClosed(st) ? null : nextActionIndex(st, idx);
   }
+
   function actCallCheck(st, idx){
     const p=st.players[idx];
     const call=amountToCall(st,p);
@@ -546,6 +552,7 @@
     st.acted.push(idx);
     st.toAct = bettingClosed(st) ? null : nextActionIndex(st, idx);
   }
+
   function actRaiseTo(st, idx, raiseToRaw){
     const p=st.players[idx];
     let raiseTo = Number(raiseToRaw||0);
@@ -566,6 +573,7 @@
 
     st.toAct = bettingClosed(st) ? null : nextActionIndex(st, idx);
   }
+
   function advanceStreet(st){
     if(!st.handActive) return;
     if(!bettingClosed(st)) return;
@@ -604,33 +612,84 @@
       doShowdown(st);
     }
   }
+
+  // ✅ SIDE POT / ALL-IN helyes kifizetés
   function doShowdown(st){
-    const alive=st.players.filter(p=>p.inHand && !p.folded);
-    if(alive.length===0){ st.handActive=false; hist(st,"Showdown: nincs aktív játékos."); return; }
-
-    let bestEval=null;
-    for(const p of alive){
-      const e = evaluate7(p.hand.concat(st.community));
-      p._eval = e;
-      if(!bestEval || cmpEval(e, bestEval) > 0) bestEval = e;
+    const alive = st.players.filter(p => p.inHand && !p.folded);
+    if(alive.length===0){
+      st.handActive=false;
+      hist(st,"Showdown: nincs aktív játékos.");
+      return;
     }
-    const winners = alive.filter(p => cmpEval(p._eval, bestEval) === 0);
 
-    const pot = st.pot;
-    const share = Math.floor(pot / winners.length);
-    let rem = pot - share * winners.length;
+    // értékelés mindenkinek (2 kéz + 5 board => best 5)
+    for(const p of alive){
+      p._eval = evaluate7(p.hand.concat(st.community));
+    }
 
-    for(const w of winners) w.stack += share;
-    for(let i=0; i<winners.length && rem>0; i++){ winners[i].stack += 1; rem--; }
+    // befizetési szintek (side pot)
+    const investedAll = st.players
+      .map(p => ({ id: p.id, invested: Number(p.totalInvested||0), ref: p }))
+      .filter(x => x.invested > 0)
+      .sort((a,b)=>a.invested-b.invested);
 
-    const names = winners.map(w=>w.name).join(", ");
+    if(investedAll.length===0){
+      st.handActive=false;
+      hist(st,"Showdown: üres pot.");
+      return;
+    }
+
+    const levels = [...new Set(investedAll.map(x=>x.invested))].sort((a,b)=>a-b);
+
+    const won = new Map(st.players.map(p => [p.id, 0]));
+    let prev = 0;
+
+    for(const L of levels){
+      // ebbe a tierbe azok tartoznak, akik legalább L-ig befizettek (dobott is)
+      const inTier = st.players.filter(p => Number(p.totalInvested||0) >= L);
+      const tierAmount = (L - prev) * inTier.length;
+      prev = L;
+      if(tierAmount <= 0) continue;
+
+      // ebben a side potban csak aki nem dobott nyerhet
+      const eligible = inTier.filter(p => p.inHand && !p.folded);
+      if(eligible.length === 0) continue;
+
+      let best = eligible[0]._eval;
+      for(const p of eligible){
+        if(cmpEval(p._eval, best) > 0) best = p._eval;
+      }
+      const winners = eligible.filter(p => cmpEval(p._eval, best) === 0);
+
+      const share = Math.floor(tierAmount / winners.length);
+      let rem = tierAmount - share * winners.length;
+
+      // stabil sorrend a maradék 1 zsetonok kiosztásához
+      const ordered = winners.slice().sort((a,b)=>a.id-b.id);
+
+      for(const w of ordered){
+        w.stack += share;
+        won.set(w.id, (won.get(w.id)||0) + share);
+      }
+      for(let i=0; i<ordered.length && rem>0; i++){
+        ordered[i].stack += 1;
+        won.set(ordered[i].id, (won.get(ordered[i].id)||0) + 1);
+        rem--;
+      }
+
+      hist(st, `Side pot (${tierAmount}) nyertes(ek): ${ordered.map(w=>w.name).join(", ")} – ${best.name}`);
+    }
+
     st.handActive=false;
 
-    if(winners.length === 1) hist(st, `Showdown: ${names} nyert (+${pot}) – ${bestEval.name}`);
-    else hist(st, `Döntetlen! Nyertek: ${names}. Pot osztva (${share} / fő) – ${bestEval.name}`);
+    const summary = st.players
+      .filter(p => (won.get(p.id)||0) > 0)
+      .map(p => `${p.name} +${won.get(p.id)}`)
+      .join(" | ");
+    if(summary) hist(st, `Kifizetések: ${summary}`);
   }
 
-  // ===== bot 3mp delay =====
+  // ===== bot 3s delay =====
   let botTimer = null;
   function scheduleBotIfNeeded(){
     if(!isHost() || !hostState) return;
@@ -671,14 +730,8 @@
     const [sb,bb] = String(lobby.cfg.blinds||"10,20").split(",").map(n=>Number(n));
 
     const players = [
-      ...humans.map((h,idx)=>({
-        id: idx, name: h.name, isBot:false,
-        stack, hand:[], inHand:true, folded:false, allIn:false, bet:0, totalInvested:0
-      })),
-      ...Array.from({length:bots}).map((_,i)=>({
-        id: humans.length+i, name:`Robot #${i+1}`, isBot:true,
-        stack, hand:[], inHand:true, folded:false, allIn:false, bet:0, totalInvested:0
-      }))
+      ...humans.map((h,idx)=>({ id: idx, name: h.name, isBot:false, stack, hand:[], inHand:true, folded:false, allIn:false, bet:0, totalInvested:0 })),
+      ...Array.from({length:bots}).map((_,i)=>({ id: humans.length+i, name:`Robot #${i+1}`, isBot:true, stack, hand:[], inHand:true, folded:false, allIn:false, bet:0, totalInvested:0 }))
     ];
 
     return {
@@ -710,6 +763,7 @@
     send({ type:"state", state: hostState });
     scheduleBotIfNeeded();
   }
+
   function newHandAsHost(){
     if(!hostState || !lobby.started) return alert("Még nincs elindítva a játék.");
     if(hostState.handActive) return alert("A leosztás még tart.");
@@ -717,6 +771,7 @@
     send({ type:"state", state: hostState });
     scheduleBotIfNeeded();
   }
+
   function newGameAsHost(){
     if(!everyoneReady()) return alert("Új játékhoz minden ember legyen KÉSZ.");
     lobby.started = true;
@@ -759,7 +814,30 @@
   ui.newHandBtn.onclick  = ()=> { if(!isHost()) return; newHandAsHost(); };
   ui.newGameBtn.onclick  = ()=> { if(!isHost()) return; newGameAsHost(); };
 
-  // ===== ÜLTETÉS: körben dinamikusan =====
+  // ✅ HOST: zseton adás (kör végén, csak EMBEREK)
+  ui.topupBtn.onclick = () => {
+    if(!isHost() || !hostState) return;
+    if(hostState.handActive){ alert("Zsetont csak kör végén adj!"); return; }
+
+    const seatIdx = Number(ui.topupPlayer.value);
+    const amt = Math.max(1, Number(ui.topupAmt.value || 0));
+
+    const p = hostState.players?.[seatIdx];
+    if(!p || p.isBot){ alert("Csak ember játékosnak adhatsz zsetont."); return; }
+
+    p.stack += amt;
+    if(p.stack > 0) p.allIn = false;
+
+    hostState.history = hostState.history || [];
+    hostState.history.push(`HOST: ${p.name} kapott +${amt} zsetont.`);
+    hostState.msg = `HOST zsetont adott: ${p.name} +${amt}`;
+
+    send({ type:"state", state: hostState });
+  };
+
+  // ===== ÜLTETÉS: dinamikus körben + CLAMP, hogy a felső/alsó seat ne lógjon ki =====
+  function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+
   function getSeatPos(i, n){
     const angleStart = -Math.PI/2;
     const step = (2*Math.PI) / Math.max(2,n);
@@ -767,11 +845,16 @@
 
     const rect = ui.tableEl.getBoundingClientRect();
     const rx = rect.width * 0.40;
-    const ry = rect.height * 0.36;
+    const ry = rect.height * 0.38;
 
     const cx = 50, cy = 50;
-    const x = cx + (Math.cos(a) * (rx / rect.width) * 100);
-    const y = cy + (Math.sin(a) * (ry / rect.height) * 100);
+    let x = cx + (Math.cos(a) * (rx / rect.width) * 100);
+    let y = cy + (Math.sin(a) * (ry / rect.height) * 100);
+
+    // ✅ beljebb húzzuk, hogy a seat doboz + showdown lapok se lógjanak ki
+    x = clamp(x, 12, 88);
+    y = clamp(y, 14, 86);
+
     return {x, y};
   }
 
@@ -847,7 +930,7 @@
 
     ui.hostOnly.style.display = isHost() ? "" : "none";
 
-    // ===== LOBBY LIST =====
+    // lobby list
     ui.players.innerHTML = "";
     for(const h of (lobby.humans||[])){
       const row=document.createElement("div");
@@ -861,29 +944,21 @@
       ui.players.appendChild(row);
     }
 
-    // ===== TOPUP LISTA: CSAK EMBEREK =====
-    if (isHost() && ui.topupPlayer) {
+    // host dropdown: csak emberek (0..humans-1)
+    if(isHost()){
       ui.topupPlayer.innerHTML = "";
-
-      // ember seat indexek (0..humans-1), botok kimaradnak
-      const humanSeats = (lobby.humans || []).map(h => h.seat);
-
-      // ha van state, onnan olvassuk a stack-et
       const src = hostState || state;
-
-      humanSeats.forEach(seatIdx => {
-        const p = src?.players?.[seatIdx];
-        if(!p || p.isBot) return;
+      for(let i=0;i<(lobby.humans?.length||0);i++){
+        const nm = lobby.humans[i]?.name || `Játékos ${i}`;
+        const stck = src?.players?.[i]?.stack;
         const opt = document.createElement("option");
-        opt.value = String(seatIdx);
-        opt.textContent = `${p.name} (zseton: ${p.stack})`;
+        opt.value = String(i);
+        opt.textContent = (stck==null) ? nm : `${nm} (${stck})`;
         ui.topupPlayer.appendChild(opt);
-      });
-
-      ui.topupBtn.disabled = !(hostState || state) || ui.topupPlayer.options.length === 0;
+      }
     }
+    ui.topupBtn.disabled = !isHost() || !hostState || (hostState && hostState.handActive);
 
-    // ===== ha nincs játék =====
     if(!lobby.started || !state){
       ui.streetLbl.textContent = "—";
       ui.currentBetLbl.textContent = "0";
@@ -918,7 +993,7 @@
     ui.actionRaise.disabled = !canAct;
 
     if(!state.handActive){
-      ui.turnHint.textContent = "A leosztás véget ért. Host: 🔄 ÚJ KÖR vagy 🔁 ÚJ JÁTÉK.";
+      ui.turnHint.textContent = "A leosztás véget ért. Host: 🔄 ÚJ KÖR / 🔁 ÚJ JÁTÉK. (Ilyenkor adhatsz zsetont is.)";
     } else if(state.toAct == null || !state.players[state.toAct]){
       ui.turnHint.textContent = "Várakozás…";
     } else {
@@ -937,26 +1012,6 @@
     }
   }
 
-  // ===== Host: zseton adása (csak ember seat) =====
-  ui.topupBtn.onclick = () => {
-    if(!isHost() || !hostState) return;
-
-    const seatIdx = Number(ui.topupPlayer.value);
-    const amt = Math.max(1, Number(ui.topupAmt.value || 0));
-    const p = hostState.players?.[seatIdx];
-    if(!p || p.isBot) return;
-
-    p.stack += amt;
-    if(p.stack > 0) p.allIn = false;
-
-    hostState.history = hostState.history || [];
-    hostState.history.push(`HOST: ${p.name} kapott +${amt} zsetont.`);
-    hostState.msg = `HOST zsetont adott: ${p.name} +${amt}`;
-
-    send({ type:"state", state: hostState });
-  };
-
-  // ===== WS connect =====
   function connect(){
     ui.status.textContent = "csatlakozás…";
     ws = new WebSocket(wsUrl);
