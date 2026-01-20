@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Texas Hold'em – Online</title>
+  <style>
+    :root{--bg:#0b3d2e;--text:#eaf7f2;--muted:#bfe6d9;--acc:#ffcf5a;--line:rgba(255,255,255,.14);--danger:#ff6b6b;--ok:#6bffb1}
+    body{margin:0;font-family:system-ui,Arial;background:radial-gradient(1200px 800px at 50% 15%, #14624a, var(--bg));color:var(--text)}
+    header{padding:12px 14px;display:flex;gap:10px;justify-content:space-between;align-items:center;background:rgba(0,0,0,.18);border-bottom:1px solid var(--line);flex-wrap:wrap}
+    .badge{font-size:12px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.06);color:var(--muted)}
+    .big{font-size:18px;font-weight:900;color:var(--acc)}
+    .wrap{display:grid;grid-template-columns: 1fr 360px;gap:12px;padding:12px}
+    @media (max-width: 980px){.wrap{grid-template-columns:1fr}}
+    .panel{border:1px solid var(--line);border-radius:16px;background:rgba(0,0,0,.16);padding:12px}
+    select,button,input{border:1px solid var(--line);background:rgba(0,0,0,.18);color:var(--text);padding:10px;border-radius:12px;outline:none}
+    button{cursor:pointer;font-weight:900}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+    .tabs{display:flex;gap:8px;margin-top:10px}
+    .tab{flex:1}
+    .tab.active{border-color:rgba(255,207,90,.6);box-shadow:0 0 0 6px rgba(255,207,90,.08)}
+    .hidden{display:none}
+    .list{margin-top:10px;border:1px solid var(--line);border-radius:14px;padding:10px;background:rgba(255,255,255,.06)}
+    .pitem{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed rgba(255,255,255,.12)}
+    .pitem:last-child{border-bottom:none}
+    .pill{font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+    .pill.ready{border-color:rgba(107,255,177,.4);color:var(--ok)}
+    .pill.notready{border-color:rgba(255,107,107,.4);color:var(--danger)}
+    .pill.sb{border-color:rgba(255,207,90,.45);color:var(--acc)}
+    .pill.bb{border-color:rgba(255,207,90,.85);color:var(--acc)}
+    .pill.d{border-color:rgba(255,207,90,.25);color:var(--acc)}
+    .chatbox{height:260px;overflow:auto;border:1px solid var(--line);border-radius:14px;padding:10px;background:rgba(0,0,0,.18);white-space:pre-wrap}
+    .chatline{margin:0 0 8px 0;color:var(--muted)}
+    .chatline b{color:var(--acc)}
+    .chatSend{display:flex;gap:8px;margin-top:10px}
+    .chatSend input{flex:1}
+    .hint{font-size:12px;color:var(--muted);line-height:1.35;margin-top:10px}
+    .card{width:46px;height:64px;background:#f7f7f7;color:#1b1b1b;border-radius:10px;display:flex;flex-direction:column;justify-content:space-between;padding:6px;border:1px solid rgba(0,0,0,.12)}
+    .card.red{color:#c21d1d}
+    .community{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center;padding:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;min-height:72px}
+    .playersGrid{margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+    .pbox{border:1px solid rgba(255,255,255,.12);border-radius:14px;background:rgba(255,255,255,.06);padding:10px}
+    .pbox.top{outline:2px solid rgba(255,207,90,.55);box-shadow:0 0 0 6px rgba(255,207,90,.08)}
+    .log{margin-top:10px;height:160px;overflow:auto;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.18);border-radius:14px;padding:10px;font-size:12px;color:var(--muted);white-space:pre-wrap}
+  </style>
+</head>
+<body>
+<header>
+  <div class="row" style="gap:10px">
+    <span class="badge">Szoba: <b id="room"></b></span>
+    <span class="badge">Te: <b id="me"></b></span>
+    <span class="badge">Kapcsolat: <b id="status">—</b></span>
+    <span class="badge">Szék: <b id="seat">—</b></span>
+    <span class="badge">Host: <b id="host">—</b></span>
+  </div>
+  <div class="big" id="startInfo">Várakozás (Kész / Ready)…</div>
+</header>
+
+<div class="wrap">
+  <section class="panel">
+    <div class="row">
+      <div class="badge">Lobby + Játék</div>
+      <button id="readyBtn">KÉSZ / READY</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" id="tabGame">Játék</button>
+      <button class="tab" id="tabChat">Chat</button>
+    </div>
+
+    <div id="viewGame">
+      <div class="hint">
+        <b>DEMO:</b> Vakok → Preflop → Flop → Turn → River → Showdown.  
+        <b>Emelés minimum NINCS</b>: csak legyen nagyobb, mint az aktuális tét.
+      </div>
+
+      <!-- HOST PANEL + ÚJ GOMBOK -->
+      <div id="hostOnly" class="hint" style="margin-top:10px; display:none">
+        <b>Host beállítások</b>:
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <label class="badge">Robotok:
+            <select id="botCount">
+              <option>0</option><option>1</option><option>2</option><option selected>3</option><option>4</option>
+              <option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
+            </select>
+          </label>
+          <label class="badge">Kezdő zseton:
+            <select id="stackSel">
+              <option>500</option><option selected>1000</option><option>2000</option><option>5000</option>
+            </select>
+          </label>
+          <label class="badge">Vakok (SB/BB):
+            <select id="blindsSel">
+              <option value="5,10">5/10</option>
+              <option value="10,20" selected>10/20</option>
+              <option value="25,50">25/50</option>
+              <option value="50,100">50/100</option>
+            </select>
+          </label>
+        </div>
+
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button id="startGameBtn">▶ JÁTÉK INDÍTÁSA</button>
+          <button id="newGameBtn">🔁 ÚJ JÁTÉK</button>
+        </div>
+
+        <div class="hint">
+          Indítás előtt állíthatod a botokat/vakokat/zsetont. Indulás után a beállítások zároltak.
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <span class="badge">Utca: <b id="streetLbl">—</b></span>
+        <span class="badge">Aktuális tét: <b id="currentBetLbl">0</b></span>
+        <span class="badge">Pot: <b id="potLbl">0</b></span>
+        <span class="badge">Kör: <b id="handNoLbl">0</b></span>
+      </div>
+
+      <div class="community" id="community"></div>
+      <div class="playersGrid" id="playersGrid"></div>
+
+      <div class="hint" style="margin-top:10px"><b>Akciók</b> (csak ha te vagy soron):</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button id="actionCall">PASSZ / MEGAD</button>
+        <button id="actionFold">DOBÁS</button>
+        <input id="raiseAmt" type="number" value="40" min="0" step="10" />
+        <button id="actionRaise">TÉT / EMELÉS</button>
+      </div>
+
+      <div class="log" id="log"></div>
+      <div class="hint" id="turnHint" style="margin-top:10px;font-size:13px">—</div>
+    </div>
+
+    <div id="viewChat" class="hidden">
+      <div class="chatbox" id="chatBox"></div>
+      <div class="chatSend">
+        <input id="chatMsg" placeholder="Írj valamit…" maxlength="300" />
+        <button id="chatSend">Küldés</button>
+      </div>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="badge">Emberek</div>
+    <div class="list" id="players"></div>
+    <div class="hint">Minden ember nyomjon KÉSZ-t, aztán a host indít.</div>
+  </aside>
+</div>
+
+<script>
+  const qs = new URLSearchParams(location.search);
+  const room = (qs.get("room")||"").trim();
+  const name = (qs.get("name")||"").trim();
+  const wsUrl = (qs.get("ws")||"").trim();
+  const pw = sessionStorage.getItem("poker_room_pw") || "";
+
+  if(!room || !name || !wsUrl || !pw){
+    alert("Hiányzik a szoba / név / ws / jelszó. Menj vissza a lobbyba!");
+    location.href = "pokerlobby.html";
+  }
+
+  const ui = {
+    room: document.getElementById("room"),
+    me: document.getElementById("me"),
+    status: document.getElementById("status"),
+    seat: document.getElementById("seat"),
+    host: document.getElementById("host"),
+    startInfo: document.getElementById("startInfo"),
+
+    streetLbl: document.getElementById("streetLbl"),
+    currentBetLbl: document.getElementById("currentBetLbl"),
+    potLbl: document.getElementById("potLbl"),
+    handNoLbl: document.getElementById("handNoLbl"),
+
+    players: document.getElementById("players"),
+    community: document.getElementById("community"),
+    playersGrid: document.getElementById("playersGrid"),
+    log: document.getElementById("log"),
+    turnHint: document.getElementById("turnHint"),
+
+    tabGame: document.getElementById("tabGame"),
+    tabChat: document.getElementById("tabChat"),
+    viewGame: document.getElementById("viewGame"),
+    viewChat: document.getElementById("viewChat"),
+
+    readyBtn: document.getElementById("readyBtn"),
+    hostOnly: document.getElementById("hostOnly"),
+    botCount: document.getElementById("botCount"),
+    stackSel: document.getElementById("stackSel"),
+    blindsSel: document.getElementById("blindsSel"),
+
+    startGameBtn: document.getElementById("startGameBtn"),
+    newGameBtn: document.getElementById("newGameBtn"),
+
+    actionFold: document.getElementById("actionFold"),
+    actionCall: document.getElementById("actionCall"),
+    actionRaise: document.getElementById("actionRaise"),
+    raiseAmt: document.getElementById("raiseAmt"),
+
+    chatBox: document.getElementById("chatBox"),
+    chatMsg: document.getElementById("chatMsg"),
+    chatSend: document.getElementById("chatSend"),
+  };
+
+  ui.room.textContent = room;
+  ui.me.textContent = name;
+
+  function logLine(s){
+    ui.log.textContent += s + "\n";
+    ui.log.scrollTop = ui.log.scrollHeight;
+  }
+
+  function switchTab(which){
+    const gameOn = which === "game";
+    ui.tabGame.classList.toggle("active", gameOn);
+    ui.tabChat.classList.toggle("active", !gameOn);
+    ui.viewGame.classList.toggle("hidden", !gameOn);
+    ui.viewChat.classList.toggle("hidden", gameOn);
+  }
+  ui.tabGame.onclick = ()=>switchTab("game");
+  ui.tabChat.onclick = ()=>switchTab("chat");
+  switchTab("game");
+
+  const SUITS=["♠","♥","♦","♣"];
+  const RANKS=["2","3","4","5","6","7","8","9","T","J","Q","K","A"];
+  const RANK_VALUE=Object.fromEntries(RANKS.map((r,i)=>[r,i+2]));
+
+  function isRedSuit(s){ return s==="♥" || s==="♦"; }
+  function renderCard(c){
+    const d=document.createElement("div");
+    d.className="card"+(isRedSuit(c.s)?" red":"");
+    d.innerHTML = `<div style="font-weight:900;font-size:16px;line-height:1">${c.r}</div>
+                   <div style="align-self:flex-end;font-size:16px;line-height:1">${c.s}</div>`;
+    return d;
+  }
+  function faceDown(){
+    const d=document.createElement("div");
+    d.className="card";
+    d.style.background="rgba(0,0,0,.18)";
+    d.style.color="rgba(255,255,255,.65)";
+    d.innerHTML="<div style='font-weight:900'>?</div><div style='align-self:flex-end'>🂠</div>";
+    return d;
+  }
+  function makeDeck(){
+    const d=[];
+    for(const s of SUITS) for(const r of RANKS) d.push({r,s});
+    return d;
+  }
+  function shuffle(a){
+    for(let i=a.length-1;i>0;i--){
+      const j=Math.floor(Math.random()*(i+1));
+      [a[i],a[j]]=[a[j],a[i]];
+    }
+    return a;
+  }
+
+  // ===== 7 lapból legjobb 5 lapos =====
+  function findStraightHigh(uniqueValsDesc){
+    const set=new Set(uniqueValsDesc);
+    const wheel=[14,5,4,3,2];
+    if(wheel.every(v=>set.has(v))) return 5;
+    for(const high of uniqueValsDesc){
+      let ok=true;
+      for(let d=1;d<=4;d++){ if(!set.has(high-d)){ ok=false; break; } }
+      if(ok) return high;
+    }
+    return null;
+  }
+  function evaluate7(cards){
+    const vals=cards.map(c=>RANK_VALUE[c.r]).sort((a,b)=>b-a);
+    const byRank=new Map();
+    for(const c of cards){ const v=RANK_VALUE[c.r]; byRank.set(v,(byRank.get(v)||0)+1); }
+    const groups=[...byRank.entries()].map(([v,c])=>({v,c})).sort((a,b)=>(b.c-a.c)||(b.v-a.v));
+    const bySuit=new Map();
+    for(const c of cards){ if(!bySuit.has(c.s)) bySuit.set(c.s,[]); bySuit.get(c.s).push(RANK_VALUE[c.r]); }
+    for(const [s,arr] of bySuit) arr.sort((a,b)=>b-a);
+    const flushSuit=[...bySuit.entries()].find(([s,arr])=>arr.length>=5)?.[0] ?? null;
+
+    const unique=[...new Set(vals)];
+    const straight=findStraightHigh(unique);
+
+    let sf=null;
+    if(flushSuit){
+      const fv=[...new Set(bySuit.get(flushSuit))].sort((a,b)=>b-a);
+      sf=findStraightHigh(fv);
+    }
+    if(sf) return {cat:8,t:[sf],name:"színsor"};
+    if(groups[0]?.c===4){ const q=groups[0].v; const k=unique.find(v=>v!==q); return {cat:7,t:[q,k],name:"póker"}; }
+    if(groups[0]?.c===3 && groups[1]?.c>=2) return {cat:6,t:[groups[0].v,groups[1].v],name:"full house"};
+    if(flushSuit) return {cat:5,t:bySuit.get(flushSuit).slice(0,5),name:"szín"};
+    if(straight) return {cat:4,t:[straight],name:"sor"};
+    if(groups[0]?.c===3){
+      const tr=groups[0].v;
+      const k=unique.filter(v=>v!==tr).slice(0,2);
+      return {cat:3,t:[tr,...k],name:"drill"};
+    }
+    if(groups[0]?.c===2 && groups[1]?.c===2){
+      const hi=Math.max(groups[0].v,groups[1].v), lo=Math.min(groups[0].v,groups[1].v);
+      const k=unique.find(v=>v!==hi && v!==lo);
+      return {cat:2,t:[hi,lo,k],name:"két pár"};
+    }
+    if(groups[0]?.c===2){
+      const pr=groups[0].v;
+      const k=unique.filter(v=>v!==pr).slice(0,3);
+      return {cat:1,t:[pr,...k],name:"pár"};
+    }
+    return {cat:0,t:unique.slice(0,5),name:"magas lap"};
+  }
+  function cmpEval(a,b){
+    if(a.cat!==b.cat) return a.cat>b.cat?1:-1;
+    for(let i=0;i<Math.max(a.t.length,b.t.length);i++){
+      const av=a.t[i]??0, bv=b.t[i]??0;
+      if(av!==bv) return av>bv?1:-1;
+    }
+    return 0;
+  }
+
+  // ===== WS állapot =====
+  let ws=null, clientId=null, hostId=null, mySeat=null;
+
+  let lobby = { humans:[], ready:{}, cfg:{bots:3, stack:1000, blinds:"10,20"}, started:false };
+  let state = null;
+  let hostState = null;
+
+  function isHost(){ return clientId && hostId && clientId===hostId; }
+  function send(obj){
+    if(ws && ws.readyState===1) ws.send(JSON.stringify(obj));
+  }
+
+  // chat
+  function appendChat(n,t){
+    const p=document.createElement("p");
+    p.className="chatline";
+    p.innerHTML = `<b>${n}:</b> ${t}`;
+    ui.chatBox.appendChild(p);
+    ui.chatBox.scrollTop = ui.chatBox.scrollHeight;
+  }
+  ui.chatSend.onclick = ()=>{
+    const text = ui.chatMsg.value.trim().slice(0,300);
+    if(!text) return;
+    ui.chatMsg.value="";
+    send({ type:"intent", intent:"chat", text });
+  };
+  ui.chatMsg.addEventListener("keydown",(e)=>{ if(e.key==="Enter") ui.chatSend.click(); });
+
+  // ready
+  ui.readyBtn.onclick = ()=>{
+    const cur = !!lobby.ready[clientId];
+    send({ type:"intent", intent: cur ? "unready" : "ready" });
+  };
+  function everyoneReady(){
+    return lobby.humans.length>0 && lobby.humans.every(h => lobby.ready[h.clientId] === true);
+  }
+
+  // host config (indítás előtt)
+  function pushHostCfg(){
+    if(!isHost() || lobby.started) return;
+    const cfg = {
+      bots: Number(ui.botCount.value||0),
+      stack: Number(ui.stackSel.value||1000),
+      blinds: ui.blindsSel.value
+    };
+    send({ type:"intent", intent:"hostConfig", cfg });
+  }
+  ui.botCount.onchange = pushHostCfg;
+  ui.stackSel.onchange = pushHostCfg;
+  ui.blindsSel.onchange = pushHostCfg;
+
+  // ===== Texas Hold'em motor (emelés min. nélkül) =====
+  function nextEligibleIndex(st, from){
+    const n=st.players.length;
+    for(let t=1;t<=n;t++){
+      const idx=(from+t)%n;
+      const p=st.players[idx];
+      if(p.inHand && !p.folded) return idx;
+    }
+    return from;
+  }
+  function nextActionIndex(st, from){
+    const n=st.players.length;
+    for(let t=1;t<=n;t++){
+      const idx=(from+t)%n;
+      const p=st.players[idx];
+      if(p.inHand && !p.folded && !p.allIn) return idx;
+    }
+    return null;
+  }
+  function countAlive(st){ return st.players.filter(p=>p.inHand && !p.folded).length; }
+  function amountToCall(st,p){ return Math.max(0, st.currentBet - p.bet); }
+  function bettingClosed(st){
+    if(countAlive(st)<=1) return true;
+    const elig=st.players.filter(p=>p.inHand && !p.folded && !p.allIn);
+    if(elig.length===0) return true;
+    const acted=new Set(st.acted||[]);
+    for(const p of elig){
+      if(p.bet!==st.currentBet) return false;
+      if(!acted.has(p.id)) return false;
+    }
+    return true;
+  }
+
+  function postBlind(st, idx, amt, label){
+    const p=st.players[idx];
+    const pay=Math.min(amt, p.stack);
+    p.stack-=pay; p.bet+=pay; p.totalInvested+=pay; st.pot+=pay;
+    if(p.stack===0) p.allIn=true;
+    logLine(`${p.name} posztolja: ${label} ${pay}`);
+  }
+
+  function startHand(st){
+    st.handNo++;
+    st.deck = shuffle(makeDeck());
+    st.community=[];
+    st.pot=0;
+    st.street="PREFLOP";
+    st.currentBet=0;
+    st.acted=[];
+    st.handActive=true;
+
+    for(const p of st.players){
+      p.hand=[];
+      p.inHand = p.stack>0;
+      p.folded = !p.inHand;
+      p.allIn=false;
+      p.bet=0;
+      p.totalInvested=0;
+      p._eval=null;
+    }
+
+    st.dealer = nextEligibleIndex(st, st.dealer);
+
+    for(let k=0;k<2;k++){
+      for(let i=0;i<st.players.length;i++){
+        const idx=(st.dealer+1+i)%st.players.length;
+        if(st.players[idx].inHand) st.players[idx].hand.push(st.deck.pop());
+      }
+    }
+
+    st.sbIndex = nextEligibleIndex(st, st.dealer);
+    st.bbIndex = nextEligibleIndex(st, st.sbIndex);
+
+    postBlind(st, st.sbIndex, st.cfg.sb, "SB");
+    postBlind(st, st.bbIndex, st.cfg.bb, "BB");
+
+    st.currentBet = Math.max(...st.players.map(p=>p.bet));
+    st.toAct = nextEligibleIndex(st, st.bbIndex);
+    st.acted = [];
+    st.msg = `=== ${st.handNo}. kör ===`;
+  }
+
+  function actFold(st, idx){
+    st.players[idx].folded=true;
+    st.acted.push(idx);
+    logLine(`${st.players[idx].name}: dobás`);
+
+    if(countAlive(st)<=1){
+      const w=st.players.find(p=>p.inHand && !p.folded);
+      if(w) w.stack += st.pot;
+      st.handActive=false;
+      st.street="SHOWDOWN";
+      st.msg = `Mindenki dobott. Nyertes: ${w?.name ?? "—"} (+${st.pot})`;
+      return;
+    }
+    st.toAct = bettingClosed(st) ? null : nextActionIndex(st, idx);
+  }
+
+  function actCallCheck(st, idx){
+    const p=st.players[idx];
+    const call=amountToCall(st,p);
+    const pay=Math.min(call, p.stack);
+    p.stack-=pay; p.bet+=pay; p.totalInvested+=pay; st.pot+=pay;
+    if(p.stack===0 && call>0) p.allIn=true;
+
+    if(call===0) logLine(`${p.name}: passz`);
+    else logLine(`${p.name}: megad ${pay}${pay<call ? " (all-in)" : ""}`);
+
+    st.acted.push(idx);
+    st.toAct = bettingClosed(st) ? null : nextActionIndex(st, idx);
+  }
+
+  // emelés min nélkül: csak raiseTo > currentBet kell
+  function actRaiseTo(st, idx, raiseToRaw){
+    const p=st.players[idx];
+    let raiseTo = Number(raiseToRaw||0);
+
+    if(raiseTo <= st.currentBet){
+      actCallCheck(st, idx);
+      return;
+    }
+
+    const need=Math.max(0, raiseTo - p.bet);
+    const pay=Math.min(need, p.stack);
+    p.stack-=pay; p.bet+=pay; p.totalInvested+=pay; st.pot+=pay;
+    if(p.stack===0) p.allIn=true;
+
+    st.currentBet = p.bet;
+    st.acted = [idx];
+    logLine(`${p.name}: emel ${st.currentBet}-ig${p.allIn ? " (all-in)" : ""}`);
+
+    st.toAct = bettingClosed(st) ? null : nextActionIndex(st, idx);
+  }
+
+  function advanceStreet(st){
+    if(!st.handActive) return;
+    if(!bettingClosed(st)) return;
+
+    if(countAlive(st)<=1){
+      const w=st.players.find(p=>p.inHand && !p.folded);
+      if(w) w.stack += st.pot;
+      st.handActive=false;
+      st.street="SHOWDOWN";
+      st.msg = `Nyertes: ${w?.name ?? "—"} (+${st.pot})`;
+      return;
+    }
+
+    for(const p of st.players) p.bet = 0;
+    st.currentBet = 0;
+    st.acted = [];
+    st.toAct = nextEligibleIndex(st, st.dealer);
+
+    if(st.street==="PREFLOP"){
+      st.deck.pop();
+      st.community.push(st.deck.pop(), st.deck.pop(), st.deck.pop());
+      st.street="FLOP";
+      logLine("Flop.");
+    } else if(st.street==="FLOP"){
+      st.deck.pop();
+      st.community.push(st.deck.pop());
+      st.street="TURN";
+      logLine("Turn.");
+    } else if(st.street==="TURN"){
+      st.deck.pop();
+      st.community.push(st.deck.pop());
+      st.street="RIVER";
+      logLine("River.");
+    } else if(st.street==="RIVER"){
+      st.street="SHOWDOWN";
+      doShowdown(st);
+    }
+  }
+
+  function doShowdown(st){
+    const alive=st.players.filter(p=>p.inHand && !p.folded);
+    let best=null;
+    for(const p of alive){
+      const e = evaluate7(p.hand.concat(st.community));
+      p._eval = e;
+      if(!best || cmpEval(e, best.eval) > 0) best = {p, eval:e};
+    }
+    best.p.stack += st.pot;
+    st.handActive=false;
+    st.msg = `Showdown: ${best.p.name} nyert (+${st.pot}) – ${best.eval.name}`;
+    logLine(st.msg);
+  }
+
+  function botLoop(st){
+    let safety=120;
+    while(safety-- > 0){
+      if(st.toAct==null) break;
+      const p=st.players[st.toAct];
+      if(!p || !p.isBot || !p.inHand || p.folded || p.allIn) break;
+
+      const call=amountToCall(st,p);
+      const pressure = call / Math.max(1, p.stack + call);
+      const r=Math.random();
+
+      if(call>0 && pressure>0.45 && r<0.55){ actFold(st,p.id); continue; }
+      if(r<0.12 && p.stack > call + st.cfg.bb){ actRaiseTo(st,p.id, st.currentBet + st.cfg.bb); continue; }
+      actCallCheck(st,p.id);
+    }
+  }
+
+  function buildInitialState(resetStacks){
+    const humans = lobby.humans.slice();
+    const bots = Number(lobby.cfg.bots||0);
+    const stack = Number(lobby.cfg.stack||1000);
+    const [sb,bb] = String(lobby.cfg.blinds||"10,20").split(",").map(n=>Number(n));
+
+    const baseStack = (resetStacks ? stack : stack);
+
+    const players = [
+      ...humans.map((h,idx)=>({
+        id: idx, name: h.name, isBot:false,
+        stack: baseStack, hand:[], inHand:true, folded:false, allIn:false, bet:0, totalInvested:0
+      })),
+      ...Array.from({length:bots}).map((_,i)=>({
+        id: humans.length+i, name:`Robot #${i+1}`, isBot:true,
+        stack: baseStack, hand:[], inHand:true, folded:false, allIn:false, bet:0, totalInvested:0
+      }))
+    ];
+
+    return {
+      cfg:{ sb, bb, stack, bots },
+      handNo:0,
+      dealer:0,
+      sbIndex:null,
+      bbIndex:null,
+      deck:[],
+      community:[],
+      pot:0,
+      street:"PREFLOP",
+      toAct:null,
+      currentBet:0,
+      acted:[],
+      handActive:false,
+      msg:"Játék indul!",
+      players
+    };
+  }
+
+  function startGameAsHost(){
+    if(!everyoneReady()){
+      alert("Nem minden ember KÉSZ még.");
+      return;
+    }
+    lobby.started = true;
+    hostState = buildInitialState(true);
+    startHand(hostState);
+    botLoop(hostState);
+    while(hostState.handActive && hostState.street!=="SHOWDOWN" && bettingClosed(hostState)){
+      advanceStreet(hostState);
+      botLoop(hostState);
+    }
+    send({ type:"start", state: hostState });
+    send({ type:"state", state: hostState });
+  }
+
+  function newGameAsHost(){
+    if(!isHost()) return;
+    if(!everyoneReady()){
+      alert("Új játékhoz minden ember legyen KÉSZ.");
+      return;
+    }
+    // teljes reset + új leosztás
+    lobby.started = true;
+    hostState = buildInitialState(true);
+    startHand(hostState);
+    botLoop(hostState);
+    while(hostState.handActive && hostState.street!=="SHOWDOWN" && bettingClosed(hostState)){
+      advanceStreet(hostState);
+      botLoop(hostState);
+    }
+    send({ type:"start", state: hostState });
+    send({ type:"state", state: hostState });
+  }
+
+  function handleIntentAsHost(msg){
+    if(!hostState || !hostState.handActive) return;
+    if(msg.intent !== "action") return;
+
+    const seat = msg.seat;
+    if(seat==null) return;
+    if(hostState.toAct !== seat) return;
+
+    const p = hostState.players[seat];
+    if(!p || p.isBot) return;
+
+    if(msg.action==="fold") actFold(hostState, seat);
+    if(msg.action==="call") actCallCheck(hostState, seat);
+    if(msg.action==="raise") actRaiseTo(hostState, seat, Number(msg.amount||0));
+
+    botLoop(hostState);
+    while(hostState.handActive && hostState.street!=="SHOWDOWN" && bettingClosed(hostState)){
+      advanceStreet(hostState);
+      botLoop(hostState);
+    }
+
+    send({ type:"state", state: hostState });
+  }
+
+  // akciók
+  ui.actionFold.onclick = ()=> send({ type:"intent", intent:"action", action:"fold", amount:0 });
+  ui.actionCall.onclick = ()=> send({ type:"intent", intent:"action", action:"call", amount:0 });
+  ui.actionRaise.onclick = ()=> send({ type:"intent", intent:"action", action:"raise", amount:Number(ui.raiseAmt.value||0) });
+
+  // HOST gombok
+  ui.startGameBtn.onclick = ()=>{
+    if(!isHost()) return;
+    if(lobby.started) return alert("A játék már elindult. Új játékhoz használd: ÚJ JÁTÉK.");
+    startGameAsHost();
+  };
+  ui.newGameBtn.onclick = ()=>{
+    if(!isHost()) return;
+    newGameAsHost();
+  };
+
+  function render(){
+    ui.host.textContent = hostId || "—";
+    ui.seat.textContent = (mySeat==null ? "—" : String(mySeat));
+    ui.startInfo.textContent = lobby.started ? "Játék fut" : "Várakozás (Kész / Ready)…";
+
+    ui.hostOnly.style.display = isHost() ? "" : "none";
+    ui.botCount.disabled = !isHost() || lobby.started;
+    ui.stackSel.disabled = !isHost() || lobby.started;
+    ui.blindsSel.disabled = !isHost() || lobby.started;
+
+    ui.startGameBtn.disabled = !isHost() || lobby.started || !everyoneReady();
+    ui.newGameBtn.disabled = !isHost() || !everyoneReady();
+
+    if(lobby.cfg){
+      ui.botCount.value = String(lobby.cfg.bots ?? ui.botCount.value);
+      ui.stackSel.value = String(lobby.cfg.stack ?? ui.stackSel.value);
+      ui.blindsSel.value = String(lobby.cfg.blinds ?? ui.blindsSel.value);
+    }
+
+    const rdy = !!lobby.ready[clientId];
+    ui.readyBtn.textContent = rdy ? "KÉSZ ✓ (vissza)" : "KÉSZ / READY";
+
+    ui.players.innerHTML = "";
+    for(const h of (lobby.humans||[])){
+      const row=document.createElement("div");
+      row.className="pitem";
+      row.innerHTML = `<div>${h.name}</div>`;
+      const right=document.createElement("span");
+      const ok = lobby.ready[h.clientId] === true;
+      right.className = "pill " + (ok ? "ready" : "notready");
+      right.textContent = ok ? "KÉSZ" : "NEM KÉSZ";
+      row.appendChild(right);
+      ui.players.appendChild(row);
+    }
+
+    ui.community.innerHTML = "";
+    ui.playersGrid.innerHTML = "";
+
+    if(!lobby.started || !state){
+      ui.streetLbl.textContent = "—";
+      ui.currentBetLbl.textContent = "0";
+      ui.potLbl.textContent = "0";
+      ui.handNoLbl.textContent = "0";
+      ui.actionFold.disabled = true;
+      ui.actionCall.disabled = true;
+      ui.actionRaise.disabled = true;
+      ui.turnHint.textContent = lobby.started ? "A host indítson leosztást (ÚJ JÁTÉK), vagy várakozás…" : "Várakozás a host indítására…";
+      return;
+    }
+
+    ui.streetLbl.textContent = ({PREFLOP:"Preflop",FLOP:"Flop",TURN:"Turn",RIVER:"River",SHOWDOWN:"Showdown"}[state.street]||state.street);
+    ui.currentBetLbl.textContent = String(state.currentBet || 0);
+    ui.potLbl.textContent = String(state.pot || 0);
+    ui.handNoLbl.textContent = String(state.handNo || 0);
+
+    for(const c of (state.community||[])) ui.community.appendChild(renderCard(c));
+
+    for(let i=0;i<state.players.length;i++){
+      const p=state.players[i];
+      const box=document.createElement("div");
+      box.className="pbox" + (state.toAct===i ? " top":"");
+
+      const badges=[];
+      if(i===state.dealer) badges.push(`<span class="pill d">D</span>`);
+      if(i===state.sbIndex) badges.push(`<span class="pill sb">SB</span>`);
+      if(i===state.bbIndex) badges.push(`<span class="pill bb">BB</span>`);
+
+      box.innerHTML = `
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+          <div style="font-weight:900">${p.name}${p.isBot?" 🤖":""} ${badges.join(" ")}</div>
+          <div style="color:#bfe6d9;font-size:12px">Zseton: ${p.stack}</div>
+        </div>
+        <div style="margin-top:6px;color:#bfe6d9;font-size:12px">
+          Bet: ${p.bet} • Bekerült: ${p.totalInvested} ${p.folded?" • DOBOTT":""} ${p.allIn?" • ALL-IN":""}
+        </div>
+      `;
+
+      const hand=document.createElement("div");
+      hand.style.display="flex"; hand.style.gap="8px"; hand.style.marginTop="8px";
+      const show = (i===mySeat) || (state.street==="SHOWDOWN") || (!state.handActive);
+
+      if(p.hand?.length===2){
+        if(show){
+          hand.appendChild(renderCard(p.hand[0]));
+          hand.appendChild(renderCard(p.hand[1]));
+        }else{
+          hand.appendChild(faceDown());
+          hand.appendChild(faceDown());
+        }
+      }
+      box.appendChild(hand);
+
+      if(state.street==="SHOWDOWN" && p._eval){
+        const ev=document.createElement("div");
+        ev.className="hint";
+        ev.textContent = `Kombó: ${p._eval.name}`;
+        box.appendChild(ev);
+      }
+
+      ui.playersGrid.appendChild(box);
+    }
+
+    const canAct = state.handActive && state.toAct===mySeat;
+    ui.actionFold.disabled = !canAct;
+    ui.actionCall.disabled = !canAct;
+    ui.actionRaise.disabled = !canAct;
+
+    if(!state.handActive){
+      ui.turnHint.textContent = "A leosztás véget ért. Host: ÚJ JÁTÉK.";
+    } else if(state.toAct == null || !state.players[state.toAct]){
+      ui.turnHint.textContent = "Várakozás…";
+    } else {
+      const p = state.players[state.toAct];
+      const callAmt = amountToCall(state, p);
+      const raiseTo = Number(ui.raiseAmt.value || 0);
+
+      if(state.toAct === mySeat){
+        if(callAmt === 0){
+          ui.turnHint.textContent = `${p.name} következik – PASSZ vagy EMELÉS ${raiseTo}-ig, vagy DOBÁS.`;
+        } else {
+          ui.turnHint.textContent = `${p.name} következik – MEGADÁS ${callAmt}, vagy EMELÉS ${raiseTo}-ig, vagy DOBÁS.`;
+        }
+      } else {
+        ui.turnHint.textContent = `${p.name} következik – várakozás… ${p.isBot ? "(robot lép)" : "(játékos dönt)"}`;
+      }
+    }
+  }
+
+  // ===== WS connect =====
+  function connect(){
+    ui.status.textContent = "csatlakozás…";
+    ws = new WebSocket(wsUrl);
+
+    ws.addEventListener("open", ()=>{
+      ui.status.textContent = "online";
+      send({ type:"join", room, name, pw });
+    });
+
+    ws.addEventListener("close", ()=> ui.status.textContent = "offline");
+    ws.addEventListener("error", ()=> ui.status.textContent = "hiba");
+
+    ws.addEventListener("message", (ev)=>{
+      let msg;
+      try{ msg = JSON.parse(ev.data); } catch { return; }
+
+      if(msg.type==="welcome"){
+        clientId = msg.clientId;
+        hostId = msg.hostId;
+        mySeat = msg.seat;
+        send({ type:"getLobby" });
+        render();
+        return;
+      }
+
+      if(msg.type==="hostChanged"){
+        hostId = msg.hostId;
+        render();
+        return;
+      }
+
+      if(msg.type==="lobby"){
+        lobby = msg.lobby;
+        hostId = msg.hostId;
+        render();
+        return;
+      }
+
+      if(msg.type==="start"){
+        lobby.started = true;
+        state = msg.state;
+        // host oldalon tartsuk a hostState-t is frissen
+        if(isHost()) hostState = JSON.parse(JSON.stringify(state));
+        render();
+        return;
+      }
+
+      if(msg.type==="state"){
+        state = msg.state;
+        if(isHost()) hostState = JSON.parse(JSON.stringify(state));
+        render();
+        return;
+      }
+
+      if(msg.type==="chat"){
+        appendChat(msg.name, msg.text);
+        return;
+      }
+
+      if(msg.type==="intent" && isHost()){
+        handleIntentAsHost(msg);
+        return;
+      }
+
+      if(msg.type==="error"){
+        alert(msg.message || "Hiba");
+      }
+    });
+  }
+
+  connect();
+</script>
+</body>
+</html>
