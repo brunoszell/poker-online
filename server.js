@@ -1,198 +1,227 @@
 // server.js
-// npm i ws
+// npm i express ws
 // node server.js
-
+const express = require("express");
 const http = require("http");
-const WebSocket = require("ws");
+const { WebSocketServer } = require("ws");
+const path = require("path");
 
-const PORT = process.env.PORT || 8080;
-const MAX_PLAYERS = 10;
-const HEARTBEAT_MS = 30000;
+const app = express();
+app.get("/", (_, res) => res.send("Poker WS server OK"));
 
-const server = http.createServer((req, res) => {
-  res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
-  res.end("Poker WS server running.\n");
-});
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
 
-const wss = new WebSocket.Server({ server });
+const rooms = new Map(); // roomCode -> roomObj
 
-function rid() {
-  return (
-    Math.random().toString(36).slice(2, 10) +
-    Math.random().toString(36).slice(2, 10)
-  );
+function uid() {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(2, 8);
+}
+function now() { return Date.now(); }
+
+function makeRoom(roomCode, pw) {
+  return {
+    roomCode,
+    pw,
+    createdAt: now(),
+    hostId: null,
+    clients: new Map(), // clientId -> { ws, name, seat, isBot:false }
+    humans: [], // [{clientId,name,seat}]
+    ready: {},  // clientId->bool
+    cfg: { bots: 3, stack: 1000, blinds: "10,20" },
+    started: false,
+    state: null
+  };
 }
 
-const rooms = new Map();
-
-function send(ws, obj) {
-  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
-}
-
-function broadcast(roomName, obj) {
-  const r = rooms.get(roomName);
-  if (!r) return;
-  for (const ws of r.clients.values()) send(ws, obj);
-}
-
-function lobbyPayload(r) {
-  return { humans: r.humans, ready: r.ready, cfg: r.cfg, started: r.started };
-}
-
-function findSeat(r, clientId) {
-  const h = r.humans.find((x) => x.clientId === clientId);
-  return h ? h.seat : null;
-}
-
-function ensureHost(r) {
-  if (r.hostId && r.clients.has(r.hostId)) return;
-  r.hostId = r.humans[0]?.clientId ?? null;
-}
-
-// heartbeat
-function heartbeat() { this.isAlive = true; }
-const interval = setInterval(() => {
-  for (const ws of wss.clients) {
-    if (ws.isAlive === false) { try { ws.terminate(); } catch {} continue; }
-    ws.isAlive = false;
-    try { ws.ping(); } catch {}
+function broadcast(room, msgObj) {
+  const data = JSON.stringify(msgObj);
+  for (const c of room.clients.values()) {
+    try { c.ws.send(data); } catch {}
   }
-}, HEARTBEAT_MS);
-wss.on("close", () => clearInterval(interval));
+}
+
+function send(ws, msgObj) {
+  try { ws.send(JSON.stringify(msgObj)); } catch {}
+}
+
+function roomSnapshot(room) {
+  return {
+    humans: room.humans.map(h => ({ ...h })),
+    ready: { ...room.ready },
+    cfg: { ...room.cfg },
+    started: !!room.started
+  };
+}
+
+function assignSeat(room) {
+  // human seat index is order in humans list
+  return room.humans.length;
+}
+
+function cleanupRoomIfEmpty(roomCode) {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+  if (room.clients.size === 0) rooms.delete(roomCode);
+}
 
 wss.on("connection", (ws) => {
-  const clientId = rid();
-  ws._id = clientId;
-  ws._room = null;
+  const clientId = uid();
+  let joinedRoomCode = null;
 
-  ws.isAlive = true;
-  ws.on("pong", heartbeat);
-
-  ws.on("message", (buf) => {
+  ws.on("message", (raw) => {
     let msg;
-    try { msg = JSON.parse(buf.toString()); } catch { return; }
+    try { msg = JSON.parse(String(raw)); } catch { return; }
 
     // JOIN
     if (msg.type === "join") {
-      const { room, name, pw } = msg;
-      if (!room || !name || !pw) {
-        return send(ws, { type: "error", message: "Hiányzó belépési adat." });
+      const roomCode = String(msg.room || "").trim();
+      const name = String(msg.name || "").trim().slice(0, 24);
+      const pw = String(msg.pw || "").trim().slice(0, 48);
+
+      if (!roomCode || !name || !pw) {
+        send(ws, { type: "error", message: "Hiányzó adatok (room/name/pw)." });
+        return;
       }
 
-      let r = rooms.get(room);
-      if (!r) {
-        r = {
-          pw,
-          hostId: clientId,
-          clients: new Map(),
-          humans: [],
-          ready: {},
-          cfg: { bots: 2, stack: 1000, blinds: "10,20" },
-          started: false,
-        };
-        rooms.set(room, r);
-      } else if (r.pw !== pw) {
-        return send(ws, { type: "error", message: "Rossz jelszó." });
+      let room = rooms.get(roomCode);
+      if (!room) {
+        room = makeRoom(roomCode, pw);
+        rooms.set(roomCode, room);
+      }
+      if (room.pw !== pw) {
+        send(ws, { type: "error", message: "Hibás jelszó." });
+        return;
       }
 
-      if (r.humans.length >= MAX_PLAYERS) {
-        return send(ws, { type: "error", message: "Tele van az asztal (max 10 fő)." });
+      joinedRoomCode = roomCode;
+
+      // add client
+      if (!room.hostId) room.hostId = clientId;
+      const seat = assignSeat(room);
+
+      room.clients.set(clientId, { ws, name, seat, isBot: false });
+      room.humans.push({ clientId, name, seat });
+      room.ready[clientId] = false;
+
+      send(ws, {
+        type: "welcome",
+        clientId,
+        hostId: room.hostId,
+        isHost: room.hostId === clientId,
+        seat
+      });
+
+      broadcast(room, { type: "lobby", lobby: roomSnapshot(room), hostId: room.hostId });
+
+      // if already started, give current state
+      if (room.started && room.state) {
+        send(ws, { type: "start", state: room.state });
       }
-
-      r.clients.set(clientId, ws);
-      ws._room = room;
-
-      const seat = r.humans.length;
-      r.humans.push({ clientId, name, seat });
-      r.ready[clientId] = false;
-
-      ensureHost(r);
-
-      send(ws, { type: "welcome", clientId, hostId: r.hostId, seat });
-      broadcast(room, { type: "lobby", lobby: lobbyPayload(r), hostId: r.hostId });
       return;
     }
 
-    const room = ws._room;
+    // must be in a room after this
+    if (!joinedRoomCode) return;
+    const room = rooms.get(joinedRoomCode);
     if (!room) return;
-    const r = rooms.get(room);
-    if (!r) return;
 
+    // GET LOBBY
     if (msg.type === "getLobby") {
-      send(ws, { type: "lobby", lobby: lobbyPayload(r), hostId: r.hostId });
+      send(ws, { type: "lobby", lobby: roomSnapshot(room), hostId: room.hostId });
+      if (room.started && room.state) send(ws, { type: "start", state: room.state });
       return;
     }
 
-    // host snapshots
+    // host change (if needed)
+    if (msg.type === "pingHost") {
+      send(ws, { type: "hostChanged", hostId: room.hostId });
+      return;
+    }
+
+    // START / STATE (host authority)
     if (msg.type === "start") {
-      if (ws._id !== r.hostId) return;
-      r.started = true;
-      broadcast(room, { type: "start", state: msg.state });
+      if (room.hostId !== clientId) return;
+      room.started = true;
+      room.state = msg.state || null;
+      broadcast(room, { type: "start", state: room.state });
       return;
     }
     if (msg.type === "state") {
-      if (ws._id !== r.hostId) return;
-      broadcast(room, { type: "state", state: msg.state });
+      if (room.hostId !== clientId) return;
+      room.state = msg.state || null;
+      broadcast(room, { type: "state", state: room.state });
       return;
     }
 
+    // INTENTS
     if (msg.type === "intent") {
-      if (msg.intent === "ready") r.ready[ws._id] = true;
-      if (msg.intent === "unready") r.ready[ws._id] = false;
+      const intent = msg.intent;
 
-      // ✅ HOST CONFIG MOST MÁR BÁRMIKOR: a következő új játék/leosztás ezt fogja használni
-      if (msg.intent === "hostConfig") {
-        if (ws._id !== r.hostId) return;
-        if (msg.cfg && typeof msg.cfg === "object") {
-          const bots = Math.max(0, Math.min(10, Number(msg.cfg.bots ?? r.cfg.bots)));
-          const stack = Math.max(100, Math.min(50000, Number(msg.cfg.stack ?? r.cfg.stack)));
-          const blinds = String(msg.cfg.blinds ?? r.cfg.blinds);
-          r.cfg = { bots, stack, blinds };
-        }
+      if (intent === "ready") {
+        room.ready[clientId] = true;
+        broadcast(room, { type: "lobby", lobby: roomSnapshot(room), hostId: room.hostId });
+        return;
       }
-
-      if (msg.intent === "chat") {
+      if (intent === "unready") {
+        room.ready[clientId] = false;
+        broadcast(room, { type: "lobby", lobby: roomSnapshot(room), hostId: room.hostId });
+        return;
+      }
+      if (intent === "chat") {
         const text = String(msg.text || "").slice(0, 300);
-        const who = r.humans.find((h) => h.clientId === ws._id)?.name || "Ismeretlen";
-        broadcast(room, { type: "chat", name: who, text, at: Date.now() });
+        broadcast(room, { type: "chat", name: room.clients.get(clientId)?.name || "?", text });
+        return;
+      }
+      if (intent === "hostConfig") {
+        if (room.hostId !== clientId) return;
+        const cfg = msg.cfg || {};
+        const bots = Math.max(0, Math.min(10, Number(cfg.bots ?? room.cfg.bots)));
+        const stack = Math.max(100, Math.min(100000, Number(cfg.stack ?? room.cfg.stack)));
+        const blinds = String(cfg.blinds ?? room.cfg.blinds);
+        room.cfg = { bots, stack, blinds };
+        broadcast(room, { type: "lobby", lobby: roomSnapshot(room), hostId: room.hostId });
+        return;
       }
 
-      const hostWs = r.clients.get(r.hostId);
-      if (hostWs) {
-        send(hostWs, {
-          type: "intent",
-          from: ws._id,
-          seat: findSeat(r, ws._id),
-          intent: msg.intent,
-          action: msg.action,
-          amount: msg.amount,
-          cfg: msg.cfg,
-          text: msg.text,
-        });
+      // actions are forwarded to host too (so host can run authority logic client-side if wanted)
+      // We broadcast as intent to everyone; host listens and applies if it wants.
+      if (intent === "action") {
+        broadcast(room, { type: "intent", ...msg, from: clientId });
+        return;
       }
-
-      broadcast(room, { type: "lobby", lobby: lobbyPayload(r), hostId: r.hostId });
-      return;
     }
   });
 
   ws.on("close", () => {
-    const room = ws._room;
+    if (!joinedRoomCode) return;
+    const room = rooms.get(joinedRoomCode);
     if (!room) return;
-    const r = rooms.get(room);
-    if (!r) return;
 
-    r.clients.delete(ws._id);
-    delete r.ready[ws._id];
-    r.humans = r.humans.filter((h) => h.clientId !== ws._id);
+    const leaving = room.clients.get(clientId);
+    room.clients.delete(clientId);
+    room.humans = room.humans.filter(h => h.clientId !== clientId);
+    delete room.ready[clientId];
 
-    const oldHost = r.hostId;
-    ensureHost(r);
-    if (oldHost !== r.hostId) broadcast(room, { type: "hostChanged", hostId: r.hostId });
+    // re-seat humans (compact seats) + update server record
+    room.humans.forEach((h, idx) => { h.seat = idx; });
 
-    if (r.clients.size === 0) rooms.delete(room);
-    else broadcast(room, { type: "lobby", lobby: lobbyPayload(r), hostId: r.hostId });
+    // host reassign if host left
+    if (room.hostId === clientId) {
+      room.hostId = room.humans[0]?.clientId || null;
+      broadcast(room, { type: "hostChanged", hostId: room.hostId });
+    }
+
+    // also update clients’ stored seat (so UI can show correct)
+    for (const h of room.humans) {
+      const c = room.clients.get(h.clientId);
+      if (c) c.seat = h.seat;
+    }
+
+    broadcast(room, { type: "lobby", lobby: roomSnapshot(room), hostId: room.hostId });
+    cleanupRoomIfEmpty(joinedRoomCode);
   });
 });
 
-server.listen(PORT, () => console.log("WS szerver figyel a porton:", PORT));
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log("WS server on", PORT));
