@@ -191,7 +191,16 @@
     .playersList .pitem{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed rgba(255,255,255,.12);align-items:center}
     .playersList .pitem:last-child{border-bottom:none}
 
-    .chatbox{height:100%;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:14px;padding:10px;background:rgba(0,0,0,.18);white-space:pre-wrap}
+    .chatbox{
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:10px;
+  background:rgba(0,0,0,.18);
+  white-space:pre-wrap;
+}
     .chatline{margin:0 0 8px 0;color:var(--muted)}
     .chatline b{color:var(--acc)}
     .mention{color:var(--acc);font-weight:900}
@@ -275,7 +284,7 @@
         <div id="players" style="margin-top:10px"></div>
       </div>
 
-      <div style="min-height:0;display:flex;flex-direction:column;gap:10px">
+      <div style="min-height:0;display:flex;flex-direction:column;gap:10px;flex:1">
         <div class="badge">Chat</div>
         <div class="chatbox" id="chatBox"></div>
         <div class="chatSend">
@@ -1230,3 +1239,4 @@
 </script>
 </body>
 </html>
+
