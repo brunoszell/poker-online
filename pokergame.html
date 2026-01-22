@@ -63,12 +63,12 @@
 
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
 
-    /* ===== TABLE + HUD (panel NEM az asztalon) ===== */
+    /* ===== TABLE + HUD ===== */
     .tableWrap{
       flex:1;
       min-height:0;
       display:grid;
-      grid-template-columns: 1fr 240px; /* asztal + gombpanel */
+      grid-template-columns: 1fr 240px;
       gap:10px;
       align-items:stretch;
       justify-content:center;
@@ -128,14 +128,22 @@
     .pill.ready{border-color:rgba(107,255,177,.4);color:var(--ok)}
     .pill.notready{border-color:rgba(255,107,107,.4);color:var(--danger)}
 
+    /* ✅ erősebb villogás */
     @keyframes blinkRed {
       0%, 100% { box-shadow: 0 0 0 0 rgba(255,77,77,.0); }
-      50% { box-shadow: 0 0 0 10px rgba(255,77,77,.18); }
+      50% { box-shadow: 0 0 0 14px rgba(255,77,77,.22); }
     }
-    .seat.toActBlink{outline:2px solid rgba(255,77,77,.9);animation: blinkRed 1s infinite;}
-    .turnDot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--danger);box-shadow:0 0 10px rgba(255,77,77,.6);animation:blinkRed 1s infinite;margin-right:8px;}
+    .seat.toActBlink{
+      outline: 5px solid rgba(255,77,77,1);
+      animation: blinkRed 0.85s infinite;
+      box-shadow:
+        0 0 0 6px rgba(255,77,77,.25),
+        0 0 25px rgba(255,77,77,.65),
+        inset 0 0 18px rgba(255,77,77,.25);
+    }
+    .turnDot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--danger);box-shadow:0 0 10px rgba(255,77,77,.6);animation:blinkRed 0.85s infinite;margin-right:8px;}
 
-    /* ===== ACTION HUD RIGHT COLUMN ===== */
+    /* ===== ACTION HUD ===== */
     .actionPanel{
       position:relative;
       display:flex;
@@ -155,6 +163,21 @@
       background:rgba(255,77,77,.08);display:flex;align-items:center;font-weight:900;color:#ffd5d5;
     }
     .turnBox.hidden{display:none}
+
+    /* ✅ showdown banner középen */
+    .winnerBanner{
+      margin-top:10px;
+      padding:10px 12px;
+      border-radius:16px;
+      border:2px solid rgba(255,207,90,.55);
+      background:rgba(0,0,0,.42);
+      font-weight:1000;
+      font-size:22px;
+      letter-spacing:.3px;
+      color:#ffe6a6;
+      text-shadow:0 2px 14px rgba(0,0,0,.55);
+    }
+    .winnerBanner.hidden{display:none}
 
     /* CHAT VIEW */
     .chatGrid{
@@ -227,11 +250,12 @@
           <div class="myHandRow" id="myHandRow"></div>
 
           <div class="hint" id="turnHint" style="margin-top:8px;font-size:13px">—</div>
+          <div id="winnerBanner" class="winnerBanner hidden"></div>
         </div>
         <div id="seatLayer"></div>
       </div>
 
-      <!-- ACTION HUD (NEM az asztalon) -->
+      <!-- ACTION HUD -->
       <div class="actionPanel">
         <div id="yourTurnBox" class="turnBox hidden"><span class="turnDot"></span>TE VAGY SORON!</div>
         <button id="actionCall">PASS</button>
@@ -356,6 +380,7 @@
     seatLayer: document.getElementById("seatLayer"),
     tableEl: document.getElementById("table"),
     turnHint: document.getElementById("turnHint"),
+    winnerBanner: document.getElementById("winnerBanner"),
 
     actionFold: document.getElementById("actionFold"),
     actionCall: document.getElementById("actionCall"),
@@ -405,7 +430,8 @@
   }
 
   const SUITS=["♠","♥","♦","♣"];
-  const RANKS=["2","3","4","5","6","7","8","9","T","J","Q","K","A"];
+  // ✅ "10" ne "T"
+  const RANKS=["2","3","4","5","6","7","8","9","10","J","Q","K","A"];
   const RANK_VALUE=Object.fromEntries(RANKS.map((r,i)=>[r,i+2]));
   function isRedSuit(s){ return s==="♥" || s==="♦"; }
   function renderCard(c){
@@ -530,7 +556,6 @@
     return lobby.humans.length>0 && lobby.humans.every(h => lobby.ready[h.clientId] === true);
   }
 
-  // ✅ host config: frissítsük lokálisan is, és küldjük a szervernek
   function pushHostCfg(){
     if(!isHost()) return;
     const cfg = {
@@ -538,7 +563,7 @@
       stack: Number(ui.stackSel.value||1000),
       blinds: ui.blindsSel.value
     };
-    lobby.cfg = { ...lobby.cfg, ...cfg };          // ✅ local fix (ne ragadjon be)
+    lobby.cfg = { ...lobby.cfg, ...cfg };
     send({ type:"intent", intent:"hostConfig", cfg });
   }
   ui.botCount.onchange = pushHostCfg;
@@ -593,6 +618,7 @@
   function startHand(st){
     st.handNo++;
     st.history = [];
+    st.showdownInfo = null;
     hist(st, `=== ${st.handNo}. kör indul ===`);
 
     st.deck = shuffle(makeDeck());
@@ -644,6 +670,7 @@
       if(w) w.stack += st.pot;
       st.handActive=false;
       st.street="SHOWDOWN";
+      st.showdownInfo = w ? { winners:[w.name], handName:"mindenki dobott" } : null;
       hist(st, `Mindenki dobott. Nyertes: ${w?.name ?? "—"} (+${st.pot})`);
       return;
     }
@@ -694,6 +721,7 @@
       if(w) w.stack += st.pot;
       st.handActive=false;
       st.street="SHOWDOWN";
+      st.showdownInfo = w ? { winners:[w.name], handName:"mindenki dobott" } : null;
       hist(st, `Nyertes: ${w?.name ?? "—"} (+${st.pot})`);
       return;
     }
@@ -726,6 +754,15 @@
       p._eval = evaluate7(p.hand.concat(st.community));
     }
 
+    // ✅ középső bannerhez “overall” nyertes(ek) + kombó
+    let best = alive[0]._eval;
+    for(const p of alive){
+      if(cmpEval(p._eval, best) > 0) best = p._eval;
+    }
+    const winnersOverall = alive.filter(p => cmpEval(p._eval, best) === 0).map(p=>p.name);
+    st.showdownInfo = { winners: winnersOverall, handName: best.name };
+
+    // side pot / all-in helyes kifizetés
     const investedAll = st.players
       .map(p => ({ id: p.id, invested: Number(p.totalInvested||0) }))
       .filter(x => x.invested > 0)
@@ -746,11 +783,11 @@
       const eligible = inTier.filter(p => p.inHand && !p.folded);
       if(eligible.length === 0) continue;
 
-      let best = eligible[0]._eval;
+      let bestTier = eligible[0]._eval;
       for(const p of eligible){
-        if(cmpEval(p._eval, best) > 0) best = p._eval;
+        if(cmpEval(p._eval, bestTier) > 0) bestTier = p._eval;
       }
-      const winners = eligible.filter(p => cmpEval(p._eval, best) === 0);
+      const winners = eligible.filter(p => cmpEval(p._eval, bestTier) === 0);
 
       const share = Math.floor(tierAmount / winners.length);
       let rem = tierAmount - share * winners.length;
@@ -765,7 +802,7 @@
         won.set(ordered[i].id, (won.get(ordered[i].id)||0) + 1);
         rem--;
       }
-      hist(st, `Side pot (${tierAmount}) nyertes(ek): ${ordered.map(w=>w.name).join(", ")} – ${best.name}`);
+      hist(st, `Side pot (${tierAmount}) nyertes(ek): ${ordered.map(w=>w.name).join(", ")} – ${bestTier.name}`);
     }
 
     st.handActive=false;
@@ -810,7 +847,6 @@
     }, 3000);
   }
 
-  // ✅ host indításkor UI-ból olvasunk (nem ragad be “10 bot”)
   function getCfgForNewGame(){
     const cfg = (isHost())
       ? {
@@ -851,6 +887,7 @@
       acted:[],
       handActive:false,
       msg:"Játék indul!",
+      showdownInfo:null,
       players
     };
   }
@@ -1080,6 +1117,7 @@
       ui.actionRaise.disabled = true;
       ui.yourTurnBox.classList.add("hidden");
       ui.turnHint.textContent = "Várakozás a host indítására…";
+      ui.winnerBanner.classList.add("hidden");
       ui.boardRow.innerHTML="";
       ui.myHandRow.innerHTML="";
       ui.seatLayer.innerHTML="";
@@ -1093,7 +1131,6 @@
 
     renderTable(state);
 
-    // ✅ mySeat NUMBER -> gombok működnek
     const canAct = state.handActive && state.toAct===mySeat;
 
     ui.actionFold.disabled = !canAct;
@@ -1108,6 +1145,15 @@
       ui.actionCall.textContent = (need > 0) ? `MEGAD: ${need}` : "PASS";
     } else {
       ui.actionCall.textContent = "PASS";
+    }
+
+    // ✅ Showdown banner
+    if ((state.street === "SHOWDOWN" || !state.handActive) && state.showdownInfo?.winners?.length){
+      const w = state.showdownInfo.winners.join(", ");
+      ui.winnerBanner.textContent = `🏆 Nyertes: ${w} — ${state.showdownInfo.handName}`;
+      ui.winnerBanner.classList.remove("hidden");
+    } else {
+      ui.winnerBanner.classList.add("hidden");
     }
 
     if(!state.handActive){
@@ -1144,7 +1190,7 @@
       if(msg.type==="welcome"){
         clientId = msg.clientId;
         hostId = msg.hostId;
-        mySeat = Number(msg.seat); // ✅ FIX: legyen number
+        mySeat = Number(msg.seat); // ✅ fontos
         send({ type:"getLobby" });
         render();
         return;
