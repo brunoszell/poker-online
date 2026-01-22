@@ -37,6 +37,7 @@
       flex-direction:column;
       padding:10px;
       gap:10px;
+      min-height:0;
     }
 
     .topbar{
@@ -179,19 +180,37 @@
     }
     .winnerBanner.hidden{display:none}
 
-    /* CHAT VIEW */
+    /* ===== CHAT VIEW (✅ scroll fix) ===== */
     .chatGrid{
       flex:1;
       min-height:0;
+      height:100%;
       display:grid;
       grid-template-columns: 360px 1fr;
       gap:10px;
     }
-    .scrollBox{min-height:0;overflow:auto;border:1px solid var(--line);border-radius:14px;padding:10px;background:rgba(255,255,255,.06)}
+
+    .scrollBox{
+      min-height:0;
+      overflow:auto;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:10px;
+      background:rgba(255,255,255,.06)
+    }
     .playersList .pitem{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed rgba(255,255,255,.12);align-items:center}
     .playersList .pitem:last-child{border-bottom:none}
 
-    .chatbox{height:100%;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:14px;padding:10px;background:rgba(0,0,0,.18);white-space:pre-wrap}
+    .chatbox{
+      flex:1;
+      min-height:0;
+      overflow:auto;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:10px;
+      background:rgba(0,0,0,.18);
+      white-space:pre-wrap
+    }
     .chatline{margin:0 0 8px 0;color:var(--muted)}
     .chatline b{color:var(--acc)}
     .mention{color:var(--acc);font-weight:900}
@@ -267,7 +286,8 @@
   </section>
 
   <!-- CHAT -->
-  <section class="panel hidden" id="viewChat" style="flex:1">
+  <!-- ✅ scroll fix: display:flex + min-height:0 -->
+  <section class="panel hidden" id="viewChat" style="flex:1; display:flex; min-height:0;">
     <div class="chatGrid">
       <div class="scrollBox playersList" id="playersBox">
         <div class="badge">Játékosok</div>
@@ -275,7 +295,8 @@
         <div id="players" style="margin-top:10px"></div>
       </div>
 
-      <div style="min-height:0;display:flex;flex-direction:column;gap:10px">
+      <!-- ✅ scroll fix: height:100% -->
+      <div style="min-height:0;height:100%;display:flex;flex-direction:column;gap:10px">
         <div class="badge">Chat</div>
         <div class="chatbox" id="chatBox"></div>
         <div class="chatSend">
@@ -430,7 +451,6 @@
   }
 
   const SUITS=["♠","♥","♦","♣"];
-  // ✅ "10" ne "T"
   const RANKS=["2","3","4","5","6","7","8","9","10","J","Q","K","A"];
   const RANK_VALUE=Object.fromEntries(RANKS.map((r,i)=>[r,i+2]));
   function isRedSuit(s){ return s==="♥" || s==="♦"; }
@@ -754,7 +774,6 @@
       p._eval = evaluate7(p.hand.concat(st.community));
     }
 
-    // ✅ középső bannerhez “overall” nyertes(ek) + kombó
     let best = alive[0]._eval;
     for(const p of alive){
       if(cmpEval(p._eval, best) > 0) best = p._eval;
@@ -762,7 +781,6 @@
     const winnersOverall = alive.filter(p => cmpEval(p._eval, best) === 0).map(p=>p.name);
     st.showdownInfo = { winners: winnersOverall, handName: best.name };
 
-    // side pot / all-in helyes kifizetés
     const investedAll = st.players
       .map(p => ({ id: p.id, invested: Number(p.totalInvested||0) }))
       .filter(x => x.invested > 0)
@@ -1138,7 +1156,6 @@
     ui.actionRaise.disabled = !canAct;
     ui.yourTurnBox.classList.toggle("hidden", !canAct);
 
-    // PASS <-> MEGAD: X
     if (canAct) {
       const meP = state.players[mySeat];
       const need = amountToCall(state, meP);
@@ -1147,7 +1164,6 @@
       ui.actionCall.textContent = "PASS";
     }
 
-    // ✅ Showdown banner
     if ((state.street === "SHOWDOWN" || !state.handActive) && state.showdownInfo?.winners?.length){
       const w = state.showdownInfo.winners.join(", ");
       ui.winnerBanner.textContent = `🏆 Nyertes: ${w} — ${state.showdownInfo.handName}`;
@@ -1190,7 +1206,7 @@
       if(msg.type==="welcome"){
         clientId = msg.clientId;
         hostId = msg.hostId;
-        mySeat = Number(msg.seat); // ✅ fontos
+        mySeat = Number(msg.seat);
         send({ type:"getLobby" });
         render();
         return;
