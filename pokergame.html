@@ -14,7 +14,7 @@
       margin:0;font-family:system-ui,Arial;
       background:radial-gradient(1200px 800px at 50% 15%, #14624a, var(--bg));
       color:var(--text);
-      overflow:hidden; /* ✅ no page scroll */
+      overflow:hidden;
     }
 
     header{
@@ -32,14 +32,13 @@
     button.readyOn{background:rgba(31,122,74,.45);border-color:rgba(107,255,177,.55);color:#eafff4}
 
     .app{
-      height:calc(100vh - 62px); /* header kb */
+      height:calc(100vh - 62px);
       display:flex;
       flex-direction:column;
       padding:10px;
       gap:10px;
     }
 
-    /* top tabs row */
     .topbar{
       display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap
     }
@@ -51,9 +50,9 @@
     .panel{
       border:1px solid var(--line);border-radius:16px;background:rgba(0,0,0,.16);
       padding:12px; position:relative;
+      min-height:0;
     }
 
-    /* GAME VIEW: full table */
     .gameView{
       flex:1;
       display:flex;
@@ -64,11 +63,13 @@
 
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
 
-    /* ===== ASZTAL ===== */
+    /* ===== TABLE + HUD (panel NEM az asztalon) ===== */
     .tableWrap{
       flex:1;
       min-height:0;
-      display:flex;
+      display:grid;
+      grid-template-columns: 1fr 240px; /* asztal + gombpanel */
+      gap:10px;
       align-items:stretch;
       justify-content:center;
       border:1px solid rgba(255,255,255,.12);
@@ -77,10 +78,10 @@
       padding:10px;
       overflow:hidden;
     }
+
     .table{
       position:relative;
       width:100%;
-      max-width:1200px;
       height:100%;
       border-radius:999px;
       overflow:hidden;
@@ -102,11 +103,9 @@
     .boardRow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;align-items:center;min-height:72px}
     .myHandRow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:10px}
 
-    /* cards */
     .card{width:46px;height:64px;background:#f7f7f7;color:#1b1b1b;border-radius:10px;display:flex;flex-direction:column;justify-content:space-between;padding:6px;border:1px solid rgba(0,0,0,.12)}
     .card.red{color:#c21d1d}
 
-    /* seat */
     .seat{
       position:absolute;width:160px;padding:8px 10px;border-radius:14px;
       border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.18);
@@ -129,7 +128,6 @@
     .pill.ready{border-color:rgba(107,255,177,.4);color:var(--ok)}
     .pill.notready{border-color:rgba(255,107,107,.4);color:var(--danger)}
 
-    /* 🔴 turn blink */
     @keyframes blinkRed {
       0%, 100% { box-shadow: 0 0 0 0 rgba(255,77,77,.0); }
       50% { box-shadow: 0 0 0 10px rgba(255,77,77,.18); }
@@ -137,12 +135,9 @@
     .seat.toActBlink{outline:2px solid rgba(255,77,77,.9);animation: blinkRed 1s infinite;}
     .turnDot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--danger);box-shadow:0 0 10px rgba(255,77,77,.6);animation:blinkRed 1s infinite;margin-right:8px;}
 
-    /* ===== ACTION PANEL (jobb alul) ===== */
+    /* ===== ACTION HUD RIGHT COLUMN ===== */
     .actionPanel{
-      position:absolute;
-      right:16px;
-      bottom:16px;
-      top:auto;
+      position:relative;
       display:flex;
       flex-direction:column;
       gap:8px;
@@ -151,9 +146,8 @@
       background:rgba(0,0,0,.35);
       border:1px solid rgba(255,255,255,.14);
       box-shadow:0 10px 30px rgba(0,0,0,.45);
-      z-index:20;
       backdrop-filter: blur(6px);
-      min-width:210px;
+      min-width:0;
     }
     .actionPanel button, .actionPanel input{width:100%}
     .turnBox{
@@ -162,7 +156,7 @@
     }
     .turnBox.hidden{display:none}
 
-    /* CHAT VIEW layout */
+    /* CHAT VIEW */
     .chatGrid{
       flex:1;
       min-height:0;
@@ -181,24 +175,13 @@
     .chatSend{display:flex;gap:8px;margin-top:10px}
     .chatSend input{flex:1}
     #chatNotif{background:#ff4d4d;color:white;font-size:10px;padding:2px 6px;border-radius:999px;border:1px solid rgba(0,0,0,.18)}
-
     .hint{font-size:12px;color:var(--muted);line-height:1.35;margin-top:8px}
 
-    /* HOST VIEW */
-    .hostGrid{
-      flex:1;
-      min-height:0;
-      display:grid;
-      grid-template-columns: 1fr;
-      gap:10px;
-    }
-
-    /* fallback small screens */
     @media (max-width: 980px){
       body{overflow:auto}
       .app{height:auto}
       .chatGrid{grid-template-columns:1fr}
-      .actionPanel{position:static;margin-top:10px}
+      .tableWrap{grid-template-columns:1fr}
       .tableWrap{height:520px}
     }
   </style>
@@ -246,21 +229,21 @@
           <div class="hint" id="turnHint" style="margin-top:8px;font-size:13px">—</div>
         </div>
         <div id="seatLayer"></div>
+      </div>
 
-        <!-- ACTION PANEL -->
-        <div class="actionPanel">
-          <div id="yourTurnBox" class="turnBox hidden"><span class="turnDot"></span>TE VAGY SORON!</div>
-          <button id="actionCall">PASS</button>
-          <button id="actionFold">DOBÁS</button>
-          <input id="raiseAmt" type="number" value="40" min="0" step="10" />
-          <button id="actionRaise">TÉT / EMELÉS</button>
-        </div>
+      <!-- ACTION HUD (NEM az asztalon) -->
+      <div class="actionPanel">
+        <div id="yourTurnBox" class="turnBox hidden"><span class="turnDot"></span>TE VAGY SORON!</div>
+        <button id="actionCall">PASS</button>
+        <button id="actionFold">DOBÁS</button>
+        <input id="raiseAmt" type="number" value="40" min="0" step="10" />
+        <button id="actionRaise">TÉT / EMELÉS</button>
       </div>
     </div>
   </section>
 
   <!-- CHAT -->
-  <section class="panel hidden" id="viewChat" style="flex:1;min-height:0">
+  <section class="panel hidden" id="viewChat" style="flex:1">
     <div class="chatGrid">
       <div class="scrollBox playersList" id="playersBox">
         <div class="badge">Játékosok</div>
@@ -281,59 +264,58 @@
   </section>
 
   <!-- HOST -->
-  <section class="panel hidden" id="viewHost" style="flex:1;min-height:0">
-    <div class="hostGrid">
-      <div>
-        <div class="badge">Host beállítások</div>
-        <div class="hint">Itt tudod állítani az új játék paramétereit + kör végén zsetont adni.</div>
+  <section class="panel hidden" id="viewHost" style="flex:1">
+    <div>
+      <div class="badge">Host beállítások</div>
+      <div class="hint">Új játék paraméterei + kör végén zseton adás.</div>
 
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-          <label class="badge">Robotok:
-            <select id="botCount">
-              <option>0</option><option>1</option><option>2</option><option selected>3</option><option>4</option>
-              <option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
-            </select>
-          </label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <label class="badge">Robotok:
+          <select id="botCount">
+            <option value="0">0</option><option value="1">1</option><option value="2">2</option>
+            <option value="3" selected>3</option><option value="4">4</option><option value="5">5</option>
+            <option value="6">6</option><option value="7">7</option><option value="8">8</option>
+            <option value="9">9</option><option value="10">10</option>
+          </select>
+        </label>
 
-          <label class="badge">Kezdő zseton:
-            <select id="stackSel">
-              <option>500</option><option selected>1000</option><option>2000</option><option>5000</option>
-            </select>
-          </label>
+        <label class="badge">Kezdő zseton:
+          <select id="stackSel">
+            <option value="500">500</option><option value="1000" selected>1000</option><option value="2000">2000</option><option value="5000">5000</option>
+          </select>
+        </label>
 
-          <label class="badge">Vakok (SB/BB):
-            <select id="blindsSel">
-              <option value="5,10">5/10</option>
-              <option value="10,20" selected>10/20</option>
-              <option value="25,50">25/50</option>
-              <option value="50,100">50/100</option>
-            </select>
-          </label>
-        </div>
-
-        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-          <button id="startGameBtn">▶ JÁTÉK INDÍTÁSA</button>
-          <button id="newHandBtn">🔄 ÚJ KÖR</button>
-          <button id="newGameBtn">🔁 ÚJ JÁTÉK</button>
-        </div>
-
-        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <label class="badge">Játékos:
-            <select id="topupPlayer"></select>
-          </label>
-          <label class="badge">Összeg:
-            <input id="topupAmt" type="number" value="500" min="1" step="50" style="width:120px" />
-          </label>
-          <button id="topupBtn">➕ Zseton adása</button>
-        </div>
-        <div class="hint">Zsetont adni <b>kör végén</b> lehet.</div>
+        <label class="badge">Vakok (SB/BB):
+          <select id="blindsSel">
+            <option value="5,10">5/10</option>
+            <option value="10,20" selected>10/20</option>
+            <option value="25,50">25/50</option>
+            <option value="50,100">50/100</option>
+          </select>
+        </label>
       </div>
+
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button id="startGameBtn">▶ JÁTÉK INDÍTÁSA</button>
+        <button id="newHandBtn">🔄 ÚJ KÖR</button>
+        <button id="newGameBtn">🔁 ÚJ JÁTÉK</button>
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <label class="badge">Játékos:
+          <select id="topupPlayer"></select>
+        </label>
+        <label class="badge">Összeg:
+          <input id="topupAmt" type="number" value="500" min="1" step="50" style="width:120px" />
+        </label>
+        <button id="topupBtn">➕ Zseton adása</button>
+      </div>
+      <div class="hint">Zsetont adni <b>kör végén</b> lehet.</div>
     </div>
   </section>
 </div>
 
 <script>
-  // ===== params =====
   const qs = new URLSearchParams(location.search);
   const room = (qs.get("room")||"").trim();
   const name = (qs.get("name")||"").trim();
@@ -345,7 +327,6 @@
     location.href = "pokerlobby.html";
   }
 
-  // ===== ui =====
   const ui = {
     room: document.getElementById("room"),
     me: document.getElementById("me"),
@@ -370,7 +351,6 @@
 
     readyBtn: document.getElementById("readyBtn"),
 
-    // game
     boardRow: document.getElementById("boardRow"),
     myHandRow: document.getElementById("myHandRow"),
     seatLayer: document.getElementById("seatLayer"),
@@ -383,13 +363,11 @@
     raiseAmt: document.getElementById("raiseAmt"),
     yourTurnBox: document.getElementById("yourTurnBox"),
 
-    // chat + players
     players: document.getElementById("players"),
     chatBox: document.getElementById("chatBox"),
     chatMsg: document.getElementById("chatMsg"),
     chatSend: document.getElementById("chatSend"),
 
-    // host
     botCount: document.getElementById("botCount"),
     stackSel: document.getElementById("stackSel"),
     blindsSel: document.getElementById("blindsSel"),
@@ -420,14 +398,12 @@
   ui.tabHost.onclick = ()=>switchTab("host");
   switchTab("game");
 
-  // ===== helpers =====
   function escapeHtml(s){
     return String(s)
       .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
       .replace(/"/g,"&quot;").replace(/'/g,"&#039;");
   }
 
-  // ===== cards =====
   const SUITS=["♠","♥","♦","♣"];
   const RANKS=["2","3","4","5","6","7","8","9","T","J","Q","K","A"];
   const RANK_VALUE=Object.fromEntries(RANKS.map((r,i)=>[r,i+2]));
@@ -458,7 +434,6 @@
     return a;
   }
 
-  // ===== evaluator =====
   function findStraightHigh(uniqueValsDesc){
     const set=new Set(uniqueValsDesc);
     const wheel=[14,5,4,3,2];
@@ -519,7 +494,6 @@
     return 0;
   }
 
-  // ===== ws + state =====
   let ws=null, clientId=null, hostId=null, mySeat=null;
   let lobby = { humans:[], ready:{}, cfg:{bots:3, stack:1000, blinds:"10,20"}, started:false };
   let state = null;
@@ -528,7 +502,6 @@
   function isHost(){ return clientId && hostId && clientId===hostId; }
   function send(obj){ if(ws && ws.readyState===1) ws.send(JSON.stringify(obj)); }
 
-  // ===== chat =====
   function highlightMentionsSafe(text){
     const safe = escapeHtml(text);
     return safe.replace(/@([^\s]+)/g, (m,p1)=>`<span class="mention">@${p1}</span>`);
@@ -549,7 +522,6 @@
   };
   ui.chatMsg.addEventListener("keydown",(e)=>{ if(e.key==="Enter") ui.chatSend.click(); });
 
-  // ===== ready =====
   ui.readyBtn.onclick = ()=>{
     const cur = !!lobby.ready[clientId];
     send({ type:"intent", intent: cur ? "unready" : "ready" });
@@ -558,7 +530,7 @@
     return lobby.humans.length>0 && lobby.humans.every(h => lobby.ready[h.clientId] === true);
   }
 
-  // host config
+  // ✅ host config: frissítsük lokálisan is, és küldjük a szervernek
   function pushHostCfg(){
     if(!isHost()) return;
     const cfg = {
@@ -566,13 +538,13 @@
       stack: Number(ui.stackSel.value||1000),
       blinds: ui.blindsSel.value
     };
+    lobby.cfg = { ...lobby.cfg, ...cfg };          // ✅ local fix (ne ragadjon be)
     send({ type:"intent", intent:"hostConfig", cfg });
   }
   ui.botCount.onchange = pushHostCfg;
   ui.stackSel.onchange = pushHostCfg;
   ui.blindsSel.onchange = pushHostCfg;
 
-  // ===== engine helpers =====
   function nextEligibleIndex(st, from){
     const n=st.players.length;
     for(let t=1;t<=n;t++){
@@ -746,7 +718,6 @@
     }
   }
 
-  // ✅ side pot / all-in helyes kifizetés
   function doShowdown(st){
     const alive = st.players.filter(p => p.inHand && !p.folded);
     if(alive.length===0){ st.handActive=false; hist(st,"Showdown: nincs aktív játékos."); return; }
@@ -794,7 +765,6 @@
         won.set(ordered[i].id, (won.get(ordered[i].id)||0) + 1);
         rem--;
       }
-
       hist(st, `Side pot (${tierAmount}) nyertes(ek): ${ordered.map(w=>w.name).join(", ")} – ${best.name}`);
     }
 
@@ -806,7 +776,6 @@
     if(summary) hist(st, `Kifizetések: ${summary}`);
   }
 
-  // ===== bot 3s delay =====
   let botTimer = null;
   function scheduleBotIfNeeded(){
     if(!isHost() || !hostState) return;
@@ -841,11 +810,25 @@
     }, 3000);
   }
 
+  // ✅ host indításkor UI-ból olvasunk (nem ragad be “10 bot”)
+  function getCfgForNewGame(){
+    const cfg = (isHost())
+      ? {
+          bots: Number(ui.botCount.value||0),
+          stack: Number(ui.stackSel.value||1000),
+          blinds: ui.blindsSel.value
+        }
+      : lobby.cfg;
+
+    const bots = Number(cfg.bots||0);
+    const stack = Number(cfg.stack||1000);
+    const [sb,bb] = String(cfg.blinds||"10,20").split(",").map(n=>Number(n));
+    return { bots, stack, sb, bb };
+  }
+
   function buildInitialState(){
     const humans = lobby.humans.slice();
-    const bots = Number(lobby.cfg.bots||0);
-    const stack = Number(lobby.cfg.stack||1000);
-    const [sb,bb] = String(lobby.cfg.blinds||"10,20").split(",").map(n=>Number(n));
+    const { bots, stack, sb, bb } = getCfgForNewGame();
 
     const players = [
       ...humans.map((h,idx)=>({ id: idx, name: h.name, isBot:false, stack, hand:[], inHand:true, folded:false, allIn:false, bet:0, totalInvested:0 })),
@@ -901,6 +884,7 @@
   function handleIntentAsHost(msg){
     if(!hostState || !hostState.handActive) return;
     if(msg.intent !== "action") return;
+
     const seat = msg.seat;
     if(seat==null) return;
     if(hostState.toAct !== seat) return;
@@ -921,17 +905,14 @@
     scheduleBotIfNeeded();
   }
 
-  // action intents
   ui.actionFold.onclick = ()=> send({ type:"intent", intent:"action", action:"fold", amount:0 });
   ui.actionCall.onclick = ()=> send({ type:"intent", intent:"action", action:"call", amount:0 });
   ui.actionRaise.onclick = ()=> send({ type:"intent", intent:"action", action:"raise", amount:Number(ui.raiseAmt.value||0) });
 
-  // host buttons
   ui.startGameBtn.onclick = ()=> { if(!isHost()) return; if(lobby.started) return alert("A játék már elindult."); startGameAsHost(); };
   ui.newHandBtn.onclick  = ()=> { if(!isHost()) return; newHandAsHost(); };
   ui.newGameBtn.onclick  = ()=> { if(!isHost()) return; newGameAsHost(); };
 
-  // host topup (kör végén, csak emberek)
   ui.topupBtn.onclick = () => {
     if(!isHost() || !hostState) return;
     if(hostState.handActive){ alert("Zsetont csak kör végén adj!"); return; }
@@ -952,12 +933,11 @@
     send({ type:"state", state: hostState });
   };
 
-  // ===== seat positioning: everyone sees self bottom =====
   function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
   function getSeatPos(i, n){
     const me = (mySeat == null ? 0 : mySeat);
-    const rel = (i - me + n) % n;          // én => rel 0
-    const angleStart = Math.PI / 2;        // rel 0 => legalul
+    const rel = (i - me + n) % n;
+    const angleStart = Math.PI / 2;
     const step = (2*Math.PI) / Math.max(2, n);
     const a = angleStart + rel * step;
 
@@ -1036,7 +1016,6 @@
           el.appendChild(ev);
         }
       }
-
       ui.seatLayer.appendChild(el);
     }
   }
@@ -1046,15 +1025,12 @@
     ui.seat.textContent = (mySeat==null ? "—" : String(mySeat));
     ui.startInfo.textContent = lobby.started ? "Játék fut" : "Várakozás (Kész / Ready)…";
 
-    // host tab only host
     ui.tabHost.classList.toggle("hidden", !isHost());
 
-    // READY gomb állapot
     const isReady = lobby.ready[clientId] === true;
     ui.readyBtn.textContent = isReady ? "KÉSZ ✔" : "KÉSZ / READY";
     ui.readyBtn.classList.toggle("readyOn", isReady);
 
-    // players list (CHAT fülön)
     ui.players.innerHTML = "";
     for(const h of (lobby.humans||[])){
       const row=document.createElement("div");
@@ -1080,7 +1056,6 @@
       ui.players.appendChild(row);
     }
 
-    // host topup dropdown
     if(isHost() && ui.topupPlayer){
       ui.topupPlayer.innerHTML = "";
       const src = hostState || state;
@@ -1095,7 +1070,6 @@
     }
     ui.topupBtn.disabled = !isHost() || !hostState || (hostState && hostState.handActive);
 
-    // no game yet
     if(!lobby.started || !state){
       ui.streetLbl.textContent = "—";
       ui.currentBetLbl.textContent = "0";
@@ -1119,13 +1093,15 @@
 
     renderTable(state);
 
+    // ✅ mySeat NUMBER -> gombok működnek
     const canAct = state.handActive && state.toAct===mySeat;
+
     ui.actionFold.disabled = !canAct;
     ui.actionCall.disabled = !canAct;
     ui.actionRaise.disabled = !canAct;
     ui.yourTurnBox.classList.toggle("hidden", !canAct);
 
-    // ✅ PASS <-> MEGAD: X
+    // PASS <-> MEGAD: X
     if (canAct) {
       const meP = state.players[mySeat];
       const need = amountToCall(state, meP);
@@ -1149,7 +1125,6 @@
     }
   }
 
-  // ===== connect =====
   function connect(){
     ui.status.textContent = "csatlakozás…";
     ws = new WebSocket(wsUrl);
@@ -1169,7 +1144,7 @@
       if(msg.type==="welcome"){
         clientId = msg.clientId;
         hostId = msg.hostId;
-        mySeat = msg.seat;
+        mySeat = Number(msg.seat); // ✅ FIX: legyen number
         send({ type:"getLobby" });
         render();
         return;
