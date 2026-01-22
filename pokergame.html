@@ -10,7 +10,12 @@
       --line:rgba(255,255,255,.14);--danger:#ff4d4d;--ok:#6bffb1;
     }
 
-    html,body{height:100%}
+    html, body{
+  height:100%;
+  overflow:hidden;          /* ✅ a dokumentum se scrollozzon */
+  overscroll-behavior:none; /* ✅ ne “rántsa” az oldalt */
+}
+
     body{
       margin:0;
       font-family:system-ui,Arial;
@@ -205,6 +210,9 @@
     .winnerBanner.hidden{display:none}
 
     /* CHAT VIEW */
+    #viewChat{ overflow:hidden; min-height:0; }
+#viewChat .chatGrid > *{ min-height:0; }  /* ✅ grid gyerekek se nőjenek túl */
+
     .chatGrid{
       flex:1;
       min-height:0; /* ✅ kulcs */
@@ -882,3 +890,4 @@
 </script>
 </body>
 </html>
+
