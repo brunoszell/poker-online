@@ -1,88 +1,71 @@
 <!doctype html>
 <html lang="hu">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Poker Lobby</title>
-  <style>
-    body{margin:0;font-family:system-ui;background:#0b3d2e;color:#eaf7f2;min-height:100vh;display:flex;align-items:center;justify-content:center}
-    .card{width:min(620px,92vw);background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:16px}
-    input,button{width:100%;padding:12px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.18);color:#eaf7f2;outline:none}
-    button{cursor:pointer;font-weight:900}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .hint{opacity:.8;font-size:12px;line-height:1.4;margin-top:10px}
-    h1{margin:0 0 12px 0}
-    .badge{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);font-size:12px}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Texas Hold'em – Lobby</title>
+<style>
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b3d2e;color:#eaf7f2;font-family:system-ui,Arial;padding:18px}
+.box{width:min(520px,100%);background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:16px}
+h1{margin:0 0 10px;font-size:18px}
+p{margin:0 0 14px;color:#bfe6d9;font-size:13px;line-height:1.35}
+label{display:block;margin:10px 0 6px;color:#bfe6d9;font-size:12px}
+input,button{width:100%;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.18);color:#eaf7f2;outline:none;box-sizing:border-box}
+button{cursor:pointer;font-weight:900;background:rgba(255,207,90,.18)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:520px){.row{grid-template-columns:1fr}}
+.muted{margin-top:10px;color:#bfe6d9;font-size:12px}
+</style>
 </head>
 <body>
-  <div class="card">
-    <h1>Texas Hold’em – Lobby</h1>
-    <div class="hint">
-      1) Add meg a WS URL-t (Render)  2) Szoba kód + jelszó  3) Név  → Belépés
-    </div>
-    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
-      <span class="badge">GitHub Pages: csak a HTML-ek</span>
-      <span class="badge">Render: a websocket szerver</span>
-    </div>
+<div class="box">
+<h1>🎴 Texas Hold'em – Belépés</h1>
+<p>DEMO (játékpénz). Add meg a neved, szobát és jelszót.</p>
 
-    <div style="margin-top:12px">
-      <label class="hint">WebSocket URL (Render)</label>
-      <input id="ws" placeholder="wss://YOUR-RENDER.onrender.com" />
-    </div>
+<label>Név</label>
+<input id="name" maxlength="16" placeholder="pl. Brúnó" />
 
-    <div class="row" style="margin-top:10px">
-      <div>
-        <label class="hint">Szoba kód</label>
-        <input id="room" placeholder="pl. BRUNO123" />
-      </div>
-      <div>
-        <label class="hint">Jelszó</label>
-        <input id="pw" type="password" placeholder="szoba jelszó" />
-      </div>
-    </div>
+<div class="row">
+<div>
+<label>Szoba kód</label>
+<input id="room" maxlength="24" placeholder="pl. teszt" />
+</div>
+<div>
+<label>Szoba jelszó</label>
+<input id="pw" maxlength="24" placeholder="pl. 1234" type="password" />
+</div>
+</div>
 
-    <div style="margin-top:10px">
-      <label class="hint">Neved</label>
-      <input id="name" placeholder="pl. Csongor" />
-    </div>
-
-    <button id="go" style="margin-top:12px">BELÉPÉS</button>
-
-    <div class="hint">
-      Tipp: ha GitHub Pages cache-el, link végére írjatok: <b>?v=valami</b>
-    </div>
-  </div>
+<button id="go">Belépés</button>
+<div class="muted">Helyi teszt: ws://localhost:8080</div>
+</div>
 
 <script>
-  const ui = {
-    ws: document.getElementById("ws"),
-    room: document.getElementById("room"),
-    pw: document.getElementById("pw"),
-    name: document.getElementById("name"),
-    go: document.getElementById("go"),
-  };
+const saved = JSON.parse(localStorage.getItem("poker_lobby") || "{}");
+const elName = document.getElementById("name");
+const elRoom = document.getElementById("room");
+const elPw   = document.getElementById("pw");
 
-  ui.ws.value = localStorage.getItem("poker_ws") || "";
-  ui.room.value = localStorage.getItem("poker_room") || "";
-  ui.name.value = localStorage.getItem("poker_name") || "";
+elName.value = saved.name || "";
+elRoom.value = saved.room || "";
 
-  ui.go.onclick = () => {
-    const ws = ui.ws.value.trim();
-    const room = ui.room.value.trim();
-    const pw = ui.pw.value.trim();
-    const name = ui.name.value.trim();
+document.getElementById("go").addEventListener("click", () => {
+const name = elName.value.trim();
+const room = elRoom.value.trim();
+const pw   = elPw.value;
 
-    if(!ws || !room || !pw || !name) return alert("Tölts ki mindent!");
+if (!name) return alert("Adj meg egy nevet!");
+if (!room) return alert("Adj meg szoba kódot!");
+if (!pw)   return alert("Adj meg szoba jelszót!");
 
-    localStorage.setItem("poker_ws", ws);
-    localStorage.setItem("poker_room", room);
-    localStorage.setItem("poker_name", name);
-    sessionStorage.setItem("poker_room_pw", pw);
+localStorage.setItem("poker_lobby", JSON.stringify({ name, room }));
+sessionStorage.setItem("poker_room_pw", pw);
 
-    const url = `pokergame.html?ws=${encodeURIComponent(ws)}&room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}`;
-    location.href = url;
-  };
+      const ws = "ws://localhost:8080";
+      const ws = "wss://poker-online-3bzf.onrender.com";
+location.href =
+`pokergame.html?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}&ws=${encodeURIComponent(ws)}`;
+});
 </script>
 </body>
 </html>
