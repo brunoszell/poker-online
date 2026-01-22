@@ -18,7 +18,7 @@ const MAX_STACK = 50000;
 
 const server = http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
-  res.end("Poker WS server running.\n");
+  res.end("Poker WS server running. MODE=AUTHORITATIVE v2\n");
 });
 
 const wss = new WebSocket.Server({ server });
@@ -911,3 +911,4 @@ wss.on("connection", (ws) => {
 });
 
 server.listen(PORT, () => console.log("WS szerver figyel a porton:", PORT));
+
